@@ -83,13 +83,25 @@
   transition:
     background-color 0.18s ease,
     transform 0.18s ease,
-    box-shadow 0.18s ease;
+    box-shadow 0.18s ease,
+    opacity 0.18s ease;
 }
 
 .login-page__submit:hover {
   background: #ef2b1f;
   transform: translateY(-1px);
   box-shadow: 0 12px 22px rgba(239, 50, 36, 0.16);
+}
+
+.login-page__submit:active {
+  transform: translateY(0);
+}
+
+.login-page__submit:disabled,
+.login-page__sso:disabled,
+.login-page__input:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
 }
 
 .login-page__divider {
@@ -135,6 +147,10 @@
   border-color: #7d8ca1;
   background: #fafbfd;
   transform: translateY(-1px);
+}
+
+.login-page__sso:active {
+  transform: translateY(0);
 }
 
 .login-page__sso-check {

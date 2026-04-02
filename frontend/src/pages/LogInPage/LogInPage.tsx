@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { isAxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { Lock, ShieldCheck } from 'lucide-react';
+import { authService } from '../../services/authService';
 import './LogInPage.css';
 
 type FormValues = {
@@ -18,6 +20,7 @@ const initialValues: FormValues = {
 export function LogInPage() {
   const [values, setValues] = useState<FormValues>(initialValues);
   const [errors, setErrors] = useState<FormErrors>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const validate = (formValues: FormValues) => {
     const nextErrors: FormErrors = {};
@@ -41,7 +44,7 @@ export function LogInPage() {
     }
   };
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const nextErrors = validate(values);
@@ -52,7 +55,25 @@ export function LogInPage() {
       return;
     }
 
-    toast.success('Заглушка входа: JWT-авторизация будет подключена позже.');
+    try {
+      setIsSubmitting(true);
+
+      const response = await authService.login({
+        username: values.login.trim(),
+        password: values.password,
+      });
+
+      toast.success(`Вход выполнен: ${response.user.username} (${response.user.role}).`);
+      setValues((current) => ({ ...current, password: '' }));
+    } catch (error) {
+      if (isAxiosError(error) && error.response?.status === 401) {
+        toast.error('Неверный логин или пароль.');
+      } else {
+        toast.error('Не удалось выполнить вход. Попробуйте позднее.');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleSsoClick = () => {
@@ -73,8 +94,9 @@ export function LogInPage() {
               type="text"
               value={values.login}
               onChange={(event) => handleChange('login', event.target.value)}
-              placeholder="Логин"
+              placeholder="ivanov_aa"
               autoComplete="username"
+              disabled={isSubmitting}
               className={errors.login ? 'login-page__input login-page__input--error' : 'login-page__input'}
             />
             {errors.login && <small className="login-page__error">{errors.login}</small>}
@@ -86,15 +108,16 @@ export function LogInPage() {
               type="password"
               value={values.password}
               onChange={(event) => handleChange('password', event.target.value)}
-              placeholder="••••••"
+              placeholder="SuperSecretPassword123"
               autoComplete="current-password"
+              disabled={isSubmitting}
               className={errors.password ? 'login-page__input login-page__input--error' : 'login-page__input'}
             />
             {errors.password && <small className="login-page__error">{errors.password}</small>}
           </label>
 
-          <button type="submit" className="login-page__submit">
-            Войти
+          <button type="submit" className="login-page__submit" disabled={isSubmitting}>
+            {isSubmitting ? 'Входим...' : 'Войти'}
           </button>
         </form>
 
@@ -102,7 +125,7 @@ export function LogInPage() {
           <span>или</span>
         </div>
 
-        <button type="button" className="login-page__sso" onClick={handleSsoClick}>
+        <button type="button" className="login-page__sso" onClick={handleSsoClick} disabled={isSubmitting}>
           <Lock size={18} />
           <span>Войти через корпоративный SSO</span>
           <ShieldCheck size={18} className="login-page__sso-check" />

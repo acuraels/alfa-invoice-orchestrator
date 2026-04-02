@@ -1,8 +1,14 @@
+import { useEffect } from 'react';
 import { LogIn } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { authService } from '../../services/authService';
 import './LogOutPage.css';
 
 export function LogOutPage() {
+  useEffect(() => {
+    authService.logout();
+  }, []);
+
   return (
     <section className="page logout-page">
       <div className="logout-page__card">
