@@ -4,6 +4,8 @@ import sys
 
 
 def main() -> None:
+    if len(sys.argv) > 1 and sys.argv[1] == "test":
+        os.chdir(os.path.dirname(os.path.abspath(__file__)))
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "backend.settings")
     try:
         from django.core.management import execute_from_command_line

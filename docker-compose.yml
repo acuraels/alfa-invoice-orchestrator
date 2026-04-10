@@ -19,6 +19,7 @@ services:
   backend:
     build:
       context: .
+      dockerfile: docker/backend/Dockerfile
     container_name: alfa-invoice-backend
     depends_on:
       postgres:
@@ -28,10 +29,12 @@ services:
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
+    working_dir: /app/backend
     ports:
-      - "8000:8000"
+      - "${BACKEND_EXPOSED_PORT:-8001}:8000"
     volumes:
-      - .:/app
+      - ./backend:/app/backend
+      - ./entrypoint.sh:/app/entrypoint.sh:ro
 
 volumes:
   postgres_data:

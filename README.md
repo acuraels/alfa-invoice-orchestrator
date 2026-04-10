@@ -1,6 +1,6 @@
 # Alfa Invoice Orchestrator
 
-Backend для локальной разработки и проверки JWT-аутентификации, ролей доступа и PostgreSQL-конфигурации. Репозиторий также содержит frontend, но в рамках текущей задачи подготовлен полноценный Django + Django REST Framework backend с удобным запуском локально и через Docker.
+Backend для локальной разработки и проверки JWT-аутентификации, ролей доступа и PostgreSQL-конфигурации. Репозиторий также содержит frontend, но backend теперь полностью изолирован внутри каталога `backend/`.
 
 ## Стек
 
@@ -62,7 +62,7 @@ Authorization: Bearer <access_token>
 - `taxation` — доступ только к подразделению `Налогообложение`
 - `acquiring` — доступ только к подразделению `Эквайринг`
 
-Фильтрация для будущих viewset'ов и API заложена в `common/role_scope.py`. Там есть:
+Фильтрация для будущих viewset'ов и API заложена в `backend/common/role_scope.py`. Там есть:
 
 - `filter_queryset_by_role(queryset, user, department_field="department")`
 - `RoleScopedQuerysetMixin`
@@ -98,6 +98,7 @@ cp .env.example .env
 - `DEBUG` — режим отладки
 - `ALLOWED_HOSTS` — список хостов через запятую
 - `TIME_ZONE` — timezone проекта
+- `BACKEND_EXPOSED_PORT` — внешний порт backend на хосте
 - `POSTGRES_DB` — имя базы данных
 - `POSTGRES_USER` — пользователь PostgreSQL
 - `POSTGRES_PASSWORD` — пароль PostgreSQL
@@ -122,10 +123,11 @@ cp .env.example .env
 Команды:
 
 ```bash
+cp .env.example .env
+cd backend
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env
 python manage.py migrate
 python manage.py createsuperuser
 python manage.py runserver
@@ -144,12 +146,12 @@ docker compose up --build
 
 После старта будут автоматически выполнены:
 
-- установка зависимостей из `requirements.txt`
+- установка зависимостей из `backend/requirements.txt`
 - применение миграций
 - попытка создать начального администратора из `DJANGO_SUPERUSER_*`
-- запуск Django на `http://localhost:8000`
+- запуск Django на `http://localhost:8001`
 
-Админка доступна на `http://localhost:8000/admin/`.
+Админка доступна на `http://localhost:8001/admin/`.
 PostgreSQL из Docker по умолчанию будет доступен на `127.0.0.1:5433`, чтобы не конфликтовать с локальной БД на стандартном `5432`.
 
 Если нужно вручную выполнить команды в контейнере:
@@ -165,7 +167,7 @@ docker compose exec backend python manage.py test
 ### Refresh
 
 ```bash
-curl -X POST http://localhost:8000/api/auth/refresh/ \
+curl -X POST http://localhost:8001/api/auth/refresh/ \
   -H "Content-Type: application/json" \
   -d '{
     "refresh": "<jwt_refresh>"
@@ -188,6 +190,7 @@ curl -X POST http://localhost:8000/api/auth/refresh/ \
 Запуск локально:
 
 ```bash
+cd backend
 python manage.py test
 ```
 
@@ -201,13 +204,13 @@ docker compose exec backend python manage.py test
 
 ```text
 .
-├── backend/                # Django project settings, urls, ASGI/WSGI
-├── common/                 # Общие utilities, включая role scope helper
-├── users/                  # Кастомный пользователь, auth API, admin, tests
+├── backend/                # Весь Django backend: manage.py, requirements, apps, settings
+│   ├── backend/            # Django project package
+│   ├── common/             # Общие utilities, включая role scope helper
+│   └── users/              # Кастомный пользователь, auth API, admin, tests
+├── docker/                 # Dockerfile-ы
 ├── frontend/               # Frontend часть репозитория
-├── Dockerfile
 ├── docker-compose.yml
 ├── entrypoint.sh
-├── requirements.txt
-└── manage.py
+└── README.md
 ```

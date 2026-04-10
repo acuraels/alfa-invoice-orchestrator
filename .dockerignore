@@ -2,11 +2,14 @@
 .gitignore
 .env
 .venv
+backend/.venv
 __pycache__
 *.pyc
 *.pyo
 *.pyd
 .pytest_cache
+backend/.pytest_cache
 frontend/node_modules
 node_modules
 staticfiles
+backend/staticfiles

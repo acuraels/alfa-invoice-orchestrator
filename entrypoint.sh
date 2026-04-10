@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 
+cd /app/backend
+
 echo "Applying database migrations..."
 until python manage.py migrate --noinput; do
   echo "Database is unavailable, retrying in 2 seconds..."
