@@ -2,6 +2,7 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: alfa-invoice-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -16,25 +17,230 @@ services:
       timeout: 5s
       retries: 10
 
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: alfa-invoice-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-guest}
+    ports:
+      - "${RABBITMQ_EXPOSED_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_EXPOSED_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
   backend:
     build:
       context: .
       dockerfile: docker/backend/Dockerfile
     container_name: alfa-invoice-backend
+    restart: unless-stopped
     depends_on:
       postgres:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     env_file:
       - .env
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
+      CELERY_BROKER_URL: amqp://${RABBITMQ_DEFAULT_USER:-guest}:${RABBITMQ_DEFAULT_PASS:-guest}@rabbitmq:5672//
+      CELERY_RESULT_BACKEND: rpc://
+      CORS_ALLOW_ALL_ORIGINS: "true"
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus_multiproc
     working_dir: /app/backend
+    command: ["/app/entrypoint.sh", "web"]
     ports:
       - "${BACKEND_EXPOSED_PORT:-8001}:8000"
     volumes:
       - ./backend:/app/backend
+      - ./scripts:/app/scripts
+      - ./artifacts:/app/artifacts
       - ./entrypoint.sh:/app/entrypoint.sh:ro
+      - prometheus_multiproc:/tmp/prometheus_multiproc
+
+  mock_abs_producer:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    container_name: alfa-invoice-mock-abs-producer
+    restart: unless-stopped
+    profiles: ["tools"]
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    env_file:
+      - .env
+    command:
+      - sh
+      - -c
+      - |
+        while true; do
+          python /app/scripts/generate_transactions.py --target-records $${MOCK_PRODUCER_BATCH_SIZE:-200} --output-file /app/artifacts/load-tests/mock_abs_stream.jsonl --random-seed $$(date +%s);
+          python /app/scripts/publish_jsonl_to_rabbit.py --file /app/artifacts/load-tests/mock_abs_stream.jsonl --rabbit-url amqp://$${RABBITMQ_DEFAULT_USER:-guest}:$${RABBITMQ_DEFAULT_PASS:-guest}@rabbitmq:5672// --queue-name transactions;
+          sleep $${MOCK_PRODUCER_INTERVAL_SECONDS:-5};
+        done
+    volumes:
+      - ./scripts:/app/scripts
+      - ./artifacts:/app/artifacts
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    container_name: alfa-invoice-worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      CELERY_BROKER_URL: amqp://${RABBITMQ_DEFAULT_USER:-guest}:${RABBITMQ_DEFAULT_PASS:-guest}@rabbitmq:5672//
+      CELERY_RESULT_BACKEND: rpc://
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus_multiproc
+    command: ["/app/entrypoint.sh", "worker"]
+    working_dir: /app/backend
+    volumes:
+      - ./backend:/app/backend
+      - ./entrypoint.sh:/app/entrypoint.sh:ro
+      - ./scripts:/app/scripts
+      - ./artifacts:/app/artifacts
+      - prometheus_multiproc:/tmp/prometheus_multiproc
+
+  beat:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    container_name: alfa-invoice-beat
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      CELERY_BROKER_URL: amqp://${RABBITMQ_DEFAULT_USER:-guest}:${RABBITMQ_DEFAULT_PASS:-guest}@rabbitmq:5672//
+      CELERY_RESULT_BACKEND: rpc://
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus_multiproc
+    command: ["/app/entrypoint.sh", "beat"]
+    working_dir: /app/backend
+    volumes:
+      - ./backend:/app/backend
+      - ./entrypoint.sh:/app/entrypoint.sh:ro
+      - prometheus_multiproc:/tmp/prometheus_multiproc
+
+  webapp:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+    container_name: alfa-invoice-webapp
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: http://localhost:${NGINX_EXPOSED_PORT:-8080}
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: alfa-invoice-nginx
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - webapp
+    ports:
+      - "${NGINX_EXPOSED_PORT:-8080}:80"
+    volumes:
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    container_name: alfa-invoice-prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+    ports:
+      - "${PROMETHEUS_EXPOSED_PORT:-9090}:9090"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+
+  grafana:
+    image: grafana/grafana:11.2.2
+    container_name: alfa-invoice-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "${GRAFANA_EXPOSED_PORT:-3000}:3000"
+    depends_on:
+      - prometheus
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
+
+  postgres_exporter:
+    image: prometheuscommunity/postgres-exporter:v0.16.0
+    container_name: alfa-invoice-postgres-exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+    depends_on:
+      - postgres
+    ports:
+      - "${POSTGRES_EXPORTER_EXPOSED_PORT:-9187}:9187"
+
+  rabbitmq_exporter:
+    image: kbudde/rabbitmq-exporter:latest
+    container_name: alfa-invoice-rabbitmq-exporter
+    restart: unless-stopped
+    environment:
+      RABBIT_URL: http://rabbitmq:15672
+      RABBIT_USER: ${RABBITMQ_DEFAULT_USER:-guest}
+      RABBIT_PASSWORD: ${RABBITMQ_DEFAULT_PASS:-guest}
+      PUBLISH_PORT: 9419
+      OUTPUT_FORMAT: TTY
+    depends_on:
+      - rabbitmq
+    ports:
+      - "${RABBITMQ_EXPORTER_EXPOSED_PORT:-9419}:9419"
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: alfa-invoice-cadvisor
+    restart: unless-stopped
+    privileged: true
+    ports:
+      - "${CADVISOR_EXPOSED_PORT:-8082}:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
 
 volumes:
   postgres_data:
+  rabbitmq_data:
+  prometheus_data:
+  grafana_data:
+  prometheus_multiproc:

@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: Alfa Invoice Dashboards
+    orgId: 1
+    folder: Alfa Invoice
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards

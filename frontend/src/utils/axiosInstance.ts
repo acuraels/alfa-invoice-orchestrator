@@ -6,7 +6,7 @@ import axios, {
 import type { RefreshResponse } from '../types/auth';
 import { clearAuthStorage, getAccessToken, getRefreshToken, updateAccessToken } from './authStorage';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
 const LOGIN_URL = '/api/auth/login/';
 const REFRESH_URL = '/api/auth/refresh/';
 

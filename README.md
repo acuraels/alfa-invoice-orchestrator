@@ -1,216 +1,281 @@
-# Alfa Invoice Orchestrator
+# Alfa Invoice MVP Orchestrator
 
-Backend для локальной разработки и проверки JWT-аутентификации, ролей доступа и PostgreSQL-конфигурации. Репозиторий также содержит frontend, но backend теперь полностью изолирован внутри каталога `backend/`.
+MVP-система формирования счетов-фактур из потока проводок с полным внутренним pipeline:
 
-## Стек
+`mock ABS producer -> RabbitMQ -> Celery processor (Layer 1) -> cron-daemon/beat -> Layer 2 -> REST API -> Web App -> Prometheus/Grafana -> k6`.
 
-- Python 3.12
-- Django
-- Django REST Framework
-- djangorestframework-simplejwt
-- PostgreSQL
-- Docker
-- docker compose
+## 1) Что такое Layer 1 и Layer 2
 
-## Что реализовано
+### Layer 1 (raw/intermediate)
+Сырой и промежуточный контур обработки:
+- `RawTransaction`
+- `InboundMessageLog`
+- `IdempotencyRecord`
+- `AggregationGroup` (`1 drf = 1 group`)
+- `DraftInvoice`, `DraftInvoiceLine`
+- `ProcessingError`
+- `InvoiceNumberSequence`
 
-- JWT-аутентификация через `djangorestframework-simplejwt`
-- `POST /api/auth/refresh/`
-- Access token на 15 минут
-- Refresh token на 7 дней
-- Кастомная модель пользователя с ролью
-- Django admin с управлением ролями
-- Базовая архитектура для фильтрации queryset по роли
-- Docker-setup с PostgreSQL и автоматическими миграциями
-- Базовые тесты auth API
+Layer 1 хранит вход, статусы первичной валидации, дедупликацию, draft-результат и ошибки.
 
-## JWT API
+### Layer 2 (final/read/export-ready)
+Материализованный read/export слой:
+- `FinalInvoice`, `FinalInvoiceLine`
+- `ExportRecord`, `ExportAttempt`
+- `InvoiceStatusHistory`
+- `InvoiceFieldChangeHistory`
+- `MaterializationJob`
 
-### Refresh
+Layer 2 используется Web Service/Web App для чтения, отчетов, retry/export workflow.
 
-`POST /api/auth/refresh/`
+## 2) Что делает cron-daemon
 
-Request:
+`Celery beat` запускает фоновые задачи:
+- выбор `DraftInvoice(status=READY)`
+- materialization в Layer 2 (`FinalInvoice` + lines + export record)
+- retry для `MATERIALIZATION_ERROR`
+- обновление backlog/open gauges
 
-```json
-{
-  "refresh": "<jwt_refresh>"
-}
-```
+## 3) End-to-end pipeline
 
-Response `200 OK`:
+1. Producer (скрипт или API ingest) генерирует payload.
+2. Сообщения публикуются в RabbitMQ (очередь `transactions`).
+3. Celery worker consumer:
+   - валидирует schema
+   - проверяет idempotency (`payload_hash`)
+   - сохраняет `RawTransaction`
+   - агрегирует по `drf`
+   - строит `DraftInvoice` при готовности группы
+4. Celery beat материализует draft в Layer 2.
+5. API/Web App читают Layer 1/Layer 2.
+6. Метрики экспортируются в Prometheus, графики в Grafana.
+7. Нагрузка генерируется k6 или прямой publish JSONL->Rabbit.
 
-```json
-{
-  "access": "<new_jwt_access>"
-}
-```
+## 4) Бизнес-правило `1 drf = 1 invoice flow`
 
-### Передача access token
+- `1 drf = 1 aggregation group = 1 draft invoice`.
+- В группе: `1..N INCOME` + ровно `1 VAT`.
+- Внутри группы должны совпадать `counterpartyId`, `departmentId`, `date`.
+- Несовпадение -> `VALIDATION_ERROR`.
 
-Используется заголовок:
+## 5) Сервисы (docker compose)
 
-```text
-Authorization: Bearer <access_token>
-```
+- `nginx` (gateway)
+- `backend` (Django + DRF + /metrics)
+- `worker` (Celery consumer)
+- `beat` (cron-daemon)
+- `postgres`
+- `rabbitmq` (+ management)
+- `mock_abs_producer` (опционально, профиль `tools`)
+- `prometheus`
+- `grafana`
+- `postgres_exporter`
+- `rabbitmq_exporter`
+- `cadvisor`
+- `webapp` (React/Vite)
 
-## Роли
-
-- `admin` — полный доступ ко всем данным
-- `factoring` — доступ только к подразделению `Факторинг`
-- `accounting` — доступ только к подразделению `Бухучет`
-- `taxation` — доступ только к подразделению `Налогообложение`
-- `acquiring` — доступ только к подразделению `Эквайринг`
-
-Фильтрация для будущих viewset'ов и API заложена в `backend/common/role_scope.py`. Там есть:
-
-- `filter_queryset_by_role(queryset, user, department_field="department")`
-- `RoleScopedQuerysetMixin`
-
-Пример использования:
-
-```python
-from common.role_scope import RoleScopedQuerysetMixin
-
-
-class InvoiceViewSet(RoleScopedQuerysetMixin, ModelViewSet):
-    queryset = Invoice.objects.all()
-    role_scope_department_field = "department"
-```
-
-## Требования
-
-- Python 3.12+
-- PostgreSQL 15+ или совместимый
-- Docker и Docker Compose Plugin
-
-## Переменные окружения
-
-Скопируйте шаблон:
-
-```bash
-cp .env.example .env
-```
-
-Основные переменные:
-
-- `SECRET_KEY` — Django secret key
-- `DEBUG` — режим отладки
-- `ALLOWED_HOSTS` — список хостов через запятую
-- `TIME_ZONE` — timezone проекта
-- `BACKEND_EXPOSED_PORT` — внешний порт backend на хосте
-- `POSTGRES_DB` — имя базы данных
-- `POSTGRES_USER` — пользователь PostgreSQL
-- `POSTGRES_PASSWORD` — пароль PostgreSQL
-- `POSTGRES_HOST` — хост PostgreSQL
-- `POSTGRES_PORT` — порт PostgreSQL
-- `POSTGRES_EXPOSED_PORT` — внешний порт контейнерного PostgreSQL на хосте
-- `DJANGO_SUPERUSER_USERNAME` — логин начального администратора
-- `DJANGO_SUPERUSER_EMAIL` — email начального администратора
-- `DJANGO_SUPERUSER_PASSWORD` — пароль начального администратора
-
-`.env` не должен попадать в git.
-
-## Запуск локально без Docker
-
-1. Создайте и активируйте виртуальное окружение.
-2. Скопируйте `.env.example` в `.env` и укажите параметры вашего PostgreSQL.
-3. Установите зависимости.
-4. Примените миграции.
-5. Создайте суперпользователя.
-6. Запустите сервер.
-
-Команды:
-
-```bash
-cp .env.example .env
-cd backend
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python manage.py migrate
-python manage.py createsuperuser
-python manage.py runserver
-```
-
-## Запуск через Docker
-
-Базовый сценарий:
+## 6) Запуск docker compose (с нуля)
 
 ```bash
 git clone <repo-url>
 cd alfa-invoice-orchestrator
 cp .env.example .env
-docker compose up --build
+make up
 ```
 
-После старта будут автоматически выполнены:
-
-- установка зависимостей из `backend/requirements.txt`
-- применение миграций
-- попытка создать начального администратора из `DJANGO_SUPERUSER_*`
-- запуск Django на `http://localhost:8001`
-
-Админка доступна на `http://localhost:8001/admin/`.
-PostgreSQL из Docker по умолчанию будет доступен на `127.0.0.1:5433`, чтобы не конфликтовать с локальной БД на стандартном `5432`.
-
-Если нужно вручную выполнить команды в контейнере:
+Проверка статуса:
 
 ```bash
-docker compose exec backend python manage.py migrate
-docker compose exec backend python manage.py createsuperuser
-docker compose exec backend python manage.py test
+docker compose ps
 ```
 
-## Примеры curl
-
-### Refresh
+Остановка:
 
 ```bash
-curl -X POST http://localhost:8001/api/auth/refresh/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "refresh": "<jwt_refresh>"
-  }'
+make down
 ```
 
-## Типовой workflow первого запуска
-
-1. Клонировать репозиторий.
-2. Скопировать `.env.example` в `.env`.
-3. При необходимости поменять креды PostgreSQL и суперпользователя.
-4. Выполнить `docker compose up --build`.
-5. Авторизоваться в admin или использовать bootstrap-пользователя из `.env`.
-6. Проверить auth endpoints.
-
-## Тесты
-
-Есть базовые тесты auth API и JWT flow.
-
-Запуск локально:
+## 7) Миграции
 
 ```bash
-cd backend
-python manage.py test
+make migrate
 ```
 
-Запуск в Docker:
+## 8) Seed данных
 
 ```bash
-docker compose exec backend python manage.py test
+make seed
 ```
 
-## Структура проекта
+Создаются:
+- Department IDs: `101..104` (`factoring/accounting/taxation/acquiring`)
+- Counterparty IDs: `10001..10005`
+- admin user из `.env`
+- demo role users (`factoring_user`, `accounting_user`, `taxation_user`, `acquiring_user`, пароль `password`)
 
-```text
-.
-├── backend/                # Весь Django backend: manage.py, requirements, apps, settings
-│   ├── backend/            # Django project package
-│   ├── common/             # Общие utilities, включая role scope helper
-│   └── users/              # Кастомный пользователь, auth API, admin, tests
-├── docker/                 # Dockerfile-ы
-├── frontend/               # Frontend часть репозитория
-├── docker-compose.yml
-├── entrypoint.sh
-└── README.md
+## 9) Admin
+
+- URL: `http://localhost:8080/admin/` (через nginx)
+- Логин: `DJANGO_SUPERUSER_USERNAME`
+- Пароль: `DJANGO_SUPERUSER_PASSWORD`
+
+## 10) Генерация mock JSONL
+
+```bash
+make generate-jsonl COUNT=10000
 ```
+
+Прямой запуск:
+
+```bash
+python3 scripts/generate_transactions.py \
+  --target-records 10000 \
+  --output-file artifacts/load-tests/transactions.jsonl \
+  --min-income-lines-per-drf 1 \
+  --max-income-lines-per-drf 5 \
+  --allowed-vat-rates 0.1,0.2 \
+  --random-seed 42 \
+  --batch-size 200
+```
+
+## 11) Публикация JSONL в RabbitMQ
+
+```bash
+make publish-jsonl FILE=artifacts/load-tests/transactions.jsonl
+```
+
+Прямой запуск:
+
+```bash
+python3 scripts/publish_jsonl_to_rabbit.py \
+  --file artifacts/load-tests/transactions.jsonl \
+  --rabbit-url amqp://guest:guest@localhost:5672// \
+  --queue-name transactions \
+  --task-name invoices.process_transaction \
+  --batch-size 200
+```
+
+## 12) k6 нагрузка
+
+Все сценарии бьют в `POST /api/v1/ingest/transactions`.
+
+```bash
+make smoke
+make steady
+make burst
+make longrun
+```
+
+Артефакты:
+- `artifacts/load-tests/smoke_summary.json`
+- `artifacts/load-tests/steady_summary.json`
+- `artifacts/load-tests/burst_summary.json`
+- `artifacts/load-tests/longrun_summary.json`
+
+## 13) URL-ы
+
+- Backend gateway: `http://localhost:8080`
+- API docs (Swagger): `http://localhost:8080/api/docs/`
+- API schema: `http://localhost:8080/api/schema/`
+- Web App: `http://localhost:8080/`
+- Prometheus: `http://localhost:9090`
+- Grafana: `http://localhost:3000`
+- RabbitMQ management: `http://localhost:15672`
+- Direct backend (container): `http://localhost:8001`
+
+## 14) Где смотреть summary/цифры
+
+1. API:
+```bash
+GET /api/v1/reports/summary
+GET /api/v1/reports/load-test-summary
+GET /api/v1/reports/export.csv
+```
+
+2. Management command:
+```bash
+make bench-summary
+```
+
+Пишет:
+- `artifacts/load-tests/summary_*.json`
+- `artifacts/load-tests/summary_*.csv`
+- `artifacts/load-tests/summary_*.md`
+- latest copies: `summary_latest.*`
+
+3. Grafana dashboard:
+- `Alfa Invoice MVP` (auto-provisioned)
+
+## 15) Ограничения MVP
+
+- Нет реальной внешней доставки export (симуляция через `ExportRecord/ExportAttempt`).
+- Нет полноценного RBAC UI, только role-based scope на API.
+- Retry export реализован как MVP-state transition.
+- Фокус на демонстрацию полного pipeline, измеримость и bottlenecks.
+
+---
+
+## API Endpoints
+
+### Technical
+- `GET /healthz`
+- `GET /readyz`
+- `GET /metrics`
+
+### Ingest
+- `POST /api/v1/ingest/transactions`
+
+### Layer 1
+- `GET /api/v1/raw-transactions`
+- `GET /api/v1/aggregation-groups`
+- `GET /api/v1/aggregation-groups/{id}`
+- `POST /api/v1/aggregation-groups/{id}/reprocess`
+- `GET /api/v1/draft-invoices`
+- `GET /api/v1/draft-invoices/{id}`
+
+### Layer 2
+- `GET /api/v1/final-invoices`
+- `GET /api/v1/final-invoices/{id}`
+- `POST /api/v1/final-invoices/{id}/retry`
+- `GET /api/v1/export-records`
+
+### Reports
+- `GET /api/v1/reports/summary`
+- `GET /api/v1/reports/export.csv`
+- `GET /api/v1/reports/load-test-summary`
+
+### Additional operational views
+- `GET /api/v1/processing-errors`
+- `GET /api/v1/inbound-logs`
+
+---
+
+## Метрики (custom)
+
+- Ingest: `transactions_received_total`, `transactions_published_total`, `transactions_duplicate_total`, `transactions_invalid_schema_total`
+- Processor: `transactions_consumed_total`, `transactions_ack_total`, `transactions_nack_total`, `transactions_dlq_total`, `processor_duration_seconds`
+- Aggregation/Layer1: `aggregation_groups_created_total`, `aggregation_groups_ready_total`, `aggregation_groups_validation_error_total`, `aggregation_group_size_histogram`, `draft_invoices_created_total`, `draft_invoices_validation_error_total`, `transaction_to_draft_latency_seconds`, `open_groups_gauge`
+- Cron/transfer: `layer2_materialization_total`, `layer2_materialization_error_total`, `layer2_materialization_duration_seconds`, `retry_attempts_total`, `transfer_backlog_gauge`
+- Layer2/export: `final_invoices_created_total`, `final_invoices_export_ready_total`, `final_invoices_export_error_total`, `export_attempt_duration_seconds`
+- DB/infra: `db_write_duration_seconds`, `db_read_duration_seconds`, `queue_backlog_gauge`, `last_successful_processing_timestamp`
+
+Infra metrics через exporters/cAdvisor также доступны в Prometheus.
+
+---
+
+## Make targets
+
+- `make up`
+- `make down`
+- `make build`
+- `make migrate`
+- `make seed`
+- `make superuser`
+- `make test`
+- `make generate-jsonl COUNT=...`
+- `make publish-jsonl FILE=...`
+- `make smoke`
+- `make steady`
+- `make burst`
+- `make longrun`
+- `make bench-summary`

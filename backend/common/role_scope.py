@@ -1,10 +1,10 @@
 from collections.abc import Mapping
 
 ROLE_DEPARTMENT_MAP: Mapping[str, str] = {
-    "factoring": "Факторинг",
-    "accounting": "Бухучет",
-    "taxation": "Налогообложение",
-    "acquiring": "Эквайринг",
+    "factoring": "factoring",
+    "accounting": "accounting",
+    "taxation": "taxation",
+    "acquiring": "acquiring",
 }
 
 

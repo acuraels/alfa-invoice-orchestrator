@@ -1,0 +1,46 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {"type": "timeseries", "title": "Ingest tx/sec", "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0}, "targets": [{"expr": "sum(rate(transactions_received_total[1m]))", "refId": "A"}]},
+    {"type": "timeseries", "title": "Consume tx/sec", "gridPos": {"h": 8, "w": 6, "x": 6, "y": 0}, "targets": [{"expr": "sum(rate(transactions_consumed_total[1m]))", "refId": "A"}]},
+    {"type": "timeseries", "title": "Groups/sec", "gridPos": {"h": 8, "w": 6, "x": 12, "y": 0}, "targets": [{"expr": "sum(rate(aggregation_groups_created_total[1m]))", "refId": "A"}]},
+    {"type": "timeseries", "title": "Draft invoices/sec", "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0}, "targets": [{"expr": "sum(rate(draft_invoices_created_total[1m]))", "refId": "A"}]},
+
+    {"type": "timeseries", "title": "Final invoices/sec", "gridPos": {"h": 8, "w": 6, "x": 0, "y": 8}, "targets": [{"expr": "sum(rate(final_invoices_created_total[1m]))", "refId": "A"}]},
+    {"type": "timeseries", "title": "Layer1 -> Layer2 transfer rate", "gridPos": {"h": 8, "w": 6, "x": 6, "y": 8}, "targets": [{"expr": "sum(rate(layer2_materialization_total[1m]))", "refId": "A"}]},
+    {"type": "timeseries", "title": "Queue depth (ready)", "gridPos": {"h": 8, "w": 6, "x": 12, "y": 8}, "targets": [{"expr": "rabbitmq_queue_messages_ready", "refId": "A"}, {"expr": "queue_backlog_gauge", "refId": "B"}]},
+    {"type": "timeseries", "title": "Queue unacked", "gridPos": {"h": 8, "w": 6, "x": 18, "y": 8}, "targets": [{"expr": "rabbitmq_queue_messages_unacked", "refId": "A"}]},
+
+    {"type": "timeseries", "title": "Processor p50/p95/p99", "gridPos": {"h": 8, "w": 8, "x": 0, "y": 16}, "targets": [{"expr": "histogram_quantile(0.5, sum(rate(processor_duration_seconds_bucket[5m])) by (le))", "refId": "A"}, {"expr": "histogram_quantile(0.95, sum(rate(processor_duration_seconds_bucket[5m])) by (le))", "refId": "B"}, {"expr": "histogram_quantile(0.99, sum(rate(processor_duration_seconds_bucket[5m])) by (le))", "refId": "C"}]},
+    {"type": "timeseries", "title": "Tx -> Draft latency p50/p95/p99", "gridPos": {"h": 8, "w": 8, "x": 8, "y": 16}, "targets": [{"expr": "histogram_quantile(0.5, sum(rate(transaction_to_draft_latency_seconds_bucket[5m])) by (le))", "refId": "A"}, {"expr": "histogram_quantile(0.95, sum(rate(transaction_to_draft_latency_seconds_bucket[5m])) by (le))", "refId": "B"}, {"expr": "histogram_quantile(0.99, sum(rate(transaction_to_draft_latency_seconds_bucket[5m])) by (le))", "refId": "C"}]},
+    {"type": "timeseries", "title": "DLQ / Validation errors / Duplicates", "gridPos": {"h": 8, "w": 8, "x": 16, "y": 16}, "targets": [{"expr": "sum(rate(transactions_dlq_total[5m]))", "refId": "A"}, {"expr": "sum(rate(aggregation_groups_validation_error_total[5m])) + sum(rate(transactions_invalid_schema_total[5m]))", "refId": "B"}, {"expr": "sum(rate(transactions_duplicate_total[5m]))", "refId": "C"}]},
+
+    {"type": "timeseries", "title": "CPU backend/worker/postgres/rabbitmq/webapp", "gridPos": {"h": 8, "w": 12, "x": 0, "y": 24}, "targets": [{"expr": "sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_compose_service=\"backend\"}[5m]))", "legendFormat": "backend", "refId": "A"}, {"expr": "sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_compose_service=\"worker\"}[5m]))", "legendFormat": "worker", "refId": "B"}, {"expr": "sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_compose_service=\"postgres\"}[5m]))", "legendFormat": "postgres", "refId": "C"}, {"expr": "sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_compose_service=\"rabbitmq\"}[5m]))", "legendFormat": "rabbitmq", "refId": "D"}, {"expr": "sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_compose_service=\"webapp\"}[5m]))", "legendFormat": "webapp", "refId": "E"}]},
+    {"type": "timeseries", "title": "RAM backend/worker/postgres/rabbitmq/webapp", "gridPos": {"h": 8, "w": 12, "x": 12, "y": 24}, "targets": [{"expr": "sum(container_memory_working_set_bytes{container_label_com_docker_compose_service=\"backend\"})", "legendFormat": "backend", "refId": "A"}, {"expr": "sum(container_memory_working_set_bytes{container_label_com_docker_compose_service=\"worker\"})", "legendFormat": "worker", "refId": "B"}, {"expr": "sum(container_memory_working_set_bytes{container_label_com_docker_compose_service=\"postgres\"})", "legendFormat": "postgres", "refId": "C"}, {"expr": "sum(container_memory_working_set_bytes{container_label_com_docker_compose_service=\"rabbitmq\"})", "legendFormat": "rabbitmq", "refId": "D"}, {"expr": "sum(container_memory_working_set_bytes{container_label_com_docker_compose_service=\"webapp\"})", "legendFormat": "webapp", "refId": "E"}]},
+
+    {"type": "timeseries", "title": "Postgres connections", "gridPos": {"h": 8, "w": 6, "x": 0, "y": 32}, "targets": [{"expr": "pg_stat_activity_count", "refId": "A"}]},
+    {"type": "timeseries", "title": "Open groups / Ready groups", "gridPos": {"h": 8, "w": 6, "x": 6, "y": 32}, "targets": [{"expr": "open_groups_gauge", "legendFormat": "open", "refId": "A"}, {"expr": "sum(aggregation_groups_ready_total)", "legendFormat": "ready_total", "refId": "B"}]},
+    {"type": "timeseries", "title": "Final invoices created", "gridPos": {"h": 8, "w": 6, "x": 12, "y": 32}, "targets": [{"expr": "sum(final_invoices_created_total)", "refId": "A"}]},
+    {"type": "timeseries", "title": "Retry counts", "gridPos": {"h": 8, "w": 6, "x": 18, "y": 32}, "targets": [{"expr": "sum(retry_attempts_total)", "refId": "A"}]},
+
+    {"type": "timeseries", "title": "DRF group size distribution", "gridPos": {"h": 8, "w": 24, "x": 0, "y": 40}, "targets": [{"expr": "sum(rate(aggregation_group_size_histogram_bucket[5m])) by (le)", "refId": "A"}]}
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["alfa", "invoice", "mvp"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "timepicker": {},
+  "timezone": "",
+  "title": "Alfa Invoice MVP",
+  "uid": "alfa-invoice-mvp",
+  "version": 1,
+  "weekStart": ""
+}

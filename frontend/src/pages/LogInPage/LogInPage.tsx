@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { isAxiosError } from 'axios';
 import toast from 'react-hot-toast';
 import { Lock, ShieldCheck } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { authService } from '../../services/authService';
 import './LogInPage.css';
 
@@ -18,6 +19,7 @@ const initialValues: FormValues = {
 };
 
 export function LogInPage() {
+  const navigate = useNavigate();
   const [values, setValues] = useState<FormValues>(initialValues);
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -65,6 +67,7 @@ export function LogInPage() {
 
       toast.success(`Вход выполнен: ${response.user.username} (${response.user.role}).`);
       setValues((current) => ({ ...current, password: '' }));
+      navigate('/dashboard');
     } catch (error) {
       if (isAxiosError(error) && error.response?.status === 401) {
         toast.error('Неверный логин или пароль.');

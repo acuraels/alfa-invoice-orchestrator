@@ -1,5 +1,10 @@
 Django==5.2.6
 djangorestframework==3.16.1
 djangorestframework-simplejwt==5.5.1
+drf-spectacular==0.28.0
+django-cors-headers==4.9.0
+celery==5.5.3
+prometheus-client==0.23.1
 psycopg[binary]==3.2.10
 python-dotenv==1.1.1
+gunicorn==23.0.0
