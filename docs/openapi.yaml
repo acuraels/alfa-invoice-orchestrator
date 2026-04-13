@@ -1,0 +1,789 @@
+openapi: 3.0.3
+info:
+  title: Invoice API
+  version: 1.0.0
+paths:
+  /api/v1/invoices:
+    get:
+      summary: Получение списка счетов-фактур (Реестр)
+      description: Возвращает список документов согласно примененным фильтрам и параметрам пагинации. Вкладка "К обработке" фильтрует статусы `project_created` и `validating_error`. Вкладка "Обработано" фильтрует статусы `invoice_created`, `sending_error` и `sent`.
+      parameters:
+        - in: query
+          name: tab
+          schema:
+            type: string
+            enum: [to_process, processed]
+          required: true
+          description: Выбор вкладки (влияет на фильтрацию по статусам по умолчанию).
+        - in: query
+          name: counterparty
+          schema:
+            type: string
+          description: Поиск по наименованию или ИНН контрагента.
+        - in: query
+          name: dateFrom
+          schema:
+            type: string
+            format: date
+          description: Начальная дата для фильтрации (включительно). Формат ГГГГ-ММ-ДД.
+        - in: query
+          name: dateTo
+          schema:
+            type: string
+            format: date
+          description: Конечная дата для фильтрации (включительно). Формат ГГГГ-ММ-ДД.
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: 
+              - project_created
+              - validating_error
+              - invoice_created
+              - sending_error
+              - sent
+          description: Явный фильтр по статусу (должен не противоречить выбранной вкладке `tab`).
+        - in: query
+          name: departmentId
+          schema:
+            type: string
+            format: uuid
+          description: ID департамента для фильтрации.
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+          description: Номер страницы (начинается с 1).
+        - in: query
+          name: size
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+          description: Количество элементов на странице.
+      responses:
+        '200':
+          description: Успешное получение списка счетов-фактур.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoicePaginatedResponse'
+        '400':
+          description: Некорректные параметры запроса (например, неверный формат даты или UUID).
+
+  /api/v1/counterparties/suggest:
+    get:
+      summary: Поиск контрагентов для автодополнения (Autocomplete)
+      description: Быстрый поиск по части названия или ИНН. Возвращает краткую информацию (только топ-10 совпадений).
+      parameters:
+        - in: query
+          name: q
+          schema:
+            type: string
+            minLength: 2
+          required: true
+          description: Строка поиска (минимум 2 символа). Пример - "Техно" или "77012"
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+            maximum: 50
+          description: Максимальное количество подсказок в выдаче.
+      responses:
+        '200':
+          description: Список подсказок успешно получен
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CounterpartySuggestItem'
+
+  /api/v1/invoices/bulk-approve:
+    post:
+      summary: Массовое утверждение счетов-фактур
+      description: Принимает массив идентификаторов (номеров) для перевода в статус утверждения/отправки.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - invoiceNumbers
+              properties:
+                invoiceNumbers:
+                  type: array
+                  items:
+                    type: string
+                  example: ["00/FCT/260407/00000765", "00/FCT/260407/00000799"]
+      responses:
+        '200':
+          description: Операция успешно запущена
+        '400':
+          description: Ошибка валидации (например, попытка утвердить документ в некорректном статусе)
+
+  /api/v1/invoices/export:
+    get:
+      summary: Экспорт отфильтрованного реестра
+      description: Формирует файл (XLSX/CSV) на основе переданных фильтров.
+      parameters:
+        # Те же параметры фильтрации, что и в GET /api/v1/invoices (кроме пагинации)
+        - in: query
+          name: tab
+          schema:
+            type: string
+          required: true
+        - in: query
+          name: counterparty
+          schema:
+            type: string
+        - in: query
+          name: dateFrom
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: dateTo
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: status
+          description: Список статусов для фильтрации. Если передано несколько, применяется логика OR (ИЛИ).
+          schema:
+            type: array
+            items:
+              type: string
+              enum: 
+                - project_created
+                - validating_error
+                - invoice_created
+                - sending_error
+                - sent
+          style: form
+          explode: true
+          
+        - in: query
+          name: departmentId
+          description: Список ID департаментов для фильтрации. Логика OR (ИЛИ).
+          schema:
+            type: array
+            items:
+              type: string
+              format: uuid
+          style: form
+          explode: true
+          
+      responses:
+        '200':
+          description: Файл успешно сформирован
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+
+  /api/v1/invoices/{number}:
+    get:
+      summary: Получение данных счета-фактуры
+      description: Возвращает полную структуру документа, включая вложенные позиции, данные контрагента для Read-Only полей и метаданные версионирования.
+      parameters:
+        - in: path
+          name: number
+          required: true
+          schema:
+            type: string
+          description: Уникальный номер счета-фактуры (PK).
+      responses:
+        '200':
+          description: Данные успешно получены
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceDetailResponse'
+        '404':
+          description: Документ не найден
+
+    patch:
+      summary: Сохранение черновика (Частичное обновление)
+      description: Обновляет только переданные поля документа. Неизменяемые поля (статус, порядковый номер, департамент) игнорируются. Для защиты от перезаписи обязательна передача текущей версии (`version`). Метод недоступен, если документ имеет статусы группы processed (inboice_created, sending_error, sent)
+      parameters:
+        - in: path
+          name: number
+          required: true
+          schema:
+            type: string
+          description: Уникальный номер счета-фактуры.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchInvoiceRequest'
+      responses:
+        '200':
+          description: Изменения успешно применены. Возвращает актуальную модель документа.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceDetailResponse'
+        '409':
+          description: Конфликт версий. Документ был изменен другим пользователем.
+
+  
+  /api/v1/invoices/{number}/approve:
+    post:
+      summary: Утвердить и отправить
+      description: Выполняет жесткую серверную валидацию. При успехе меняет статус на `invoice_created` или `sent` (согласно стейт-машине) и блокирует дальнейшее редактирование.
+      parameters:
+        - in: path
+          name: number
+          required: true
+          schema:
+            type: string
+      # Опционально: можно передавать тело UpdateInvoiceRequest, чтобы сэкономить один PUT запрос перед утверждением, 
+      # но классический REST подразумевает сначала сохранение (PUT), затем смену состояния (POST).
+      responses:
+        '200':
+          description: Документ утвержден
+        '400':
+          description: Ошибка бизнес-валидации (например, не заполнены обязательные поля)
+  
+  /api/v1/admin/users:
+    get:
+      tags:
+        - "Управление пользователями"
+      summary: Получение списка пользователей
+      description: Возвращает реестр пользователей для отображения в таблице.
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - in: query
+          name: size
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+      responses:
+        '200':
+          description: Список пользователей получен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPaginatedResponse'
+
+    post:
+      tags:
+        - "Управление пользователями"
+      summary: Создание нового пользователя
+      description: Создает учетную запись и назначает доступы к департаментам.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateUserRequest'
+      responses:
+        '201':
+          description: Пользователь успешно создан
+        '400':
+          description: Ошибка валидации или email уже существует
+
+  /api/v1/admin/users/{id}:
+    get:
+      tags:
+        - "Управление пользователями"
+      summary: Получение данных пользователя
+      description: Возвращает детальную информацию для заполнения формы редактирования (без пароля).
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Данные получены
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserDetailResponse'
+        '404':
+          description: Пользователь не найден
+
+    patch:
+      tags:
+        - "Управление пользователями"
+      summary: Обновление пользователя
+      description: Если поле password не передано или пустое, текущий пароль сохраняется.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+      responses:
+        '200':
+          description: Данные успешно обновлены
+        '404':
+          description: Пользователь не найден
+
+    delete:
+      tags:
+        - "Управление пользователями"
+      summary: Удаление пользователя
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Пользователь успешно удален
+
+components:
+  schemas:
+    InvoiceListItem:
+      type: object
+      properties:
+        number:
+          type: string
+          description: Уникальный номер счета-фактуры.
+          example: "304"
+        counterpartyName:
+          type: string
+          description: Наименование контрагента.
+          example: 'ООО "ТехноКорп"'
+        status:
+          type: string
+          description: Текущий статус документа.
+          example: "validating_error"
+        issueDate:
+          type: string
+          format: date-time
+          description: Дата и время создания/оформления документа.
+          example: "2026-10-22T19:42:00Z"
+
+    CounterpartySuggestItem:
+      type: object
+      properties:
+        counterpartyId:
+          type: string
+          format: uuid
+          description: ID контрагента (нужен фронтенду для отправки в фильтр реестра)
+          example: "a1b2c3d4-1234-5678-90ab-cdef12345678"
+        name:
+          type: string
+          description: Полное наименование (для отображения жирным шрифтом в списке)
+          example: 'ООО "ТехноКорп"'
+        inn:
+          type: string
+          description: ИНН (для отображения мелким шрифтом под названием)
+          example: "7701234567"
+          
+    InvoicePaginatedResponse:
+      type: object
+      properties:
+        totalElements:
+          type: integer
+          description: Общее количество записей, удовлетворяющих фильтрам.
+          example: 3
+        totalPages:
+          type: integer
+          description: Общее количество страниц при заданном `size`.
+          example: 1
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceListItem'
+
+    InvoiceDetailResponse:
+      type: object
+      properties:
+        # 1. Метаданные (Шапка UI)
+        number:
+          type: string
+          example: "00/FCT/260407/00000765"
+        status:
+          type: string
+          example: "project_created"
+        departmentId:
+          type: string
+          format: uuid
+        version:
+          type: integer
+          description: Текущая версия документа (для контроля конкурентного доступа)
+          example: 3
+        versionUpdatedAt:
+          type: string
+          format: date-time
+          example: "2026-04-09T14:30:00Z"
+        versionAuthor:
+          type: string
+          example: "Анна Иванова"
+
+        # 2. Детали документа (Редактируемые и Read-only)
+        sequenceNumber:
+          type: string
+          description: Отображаемый порядковый номер в интерфейсе (765)
+          example: "765"
+        issueDate:
+          type: string
+          format: date
+          example: "2026-04-07"
+        counterpartyId:
+          type: string
+          format: uuid
+        counterpartyName:
+          type: string
+          description: Read-only для UI
+          example: 'ООО "ТехКорп Солюшнс"'
+        counterpartyInn:
+          type: string
+          description: Read-only для UI
+          example: "7701234567"
+        counterpartyAddress:
+          type: string
+          description: Read-only для UI
+          example: "г. Москва, Деловой проспект, д. 123, 101000"
+        paymentDocNumber:
+          type: string
+          nullable: true
+          example: "ПП-12345"
+        paymentDocDate:
+          type: string
+          format: date
+          nullable: true
+          example: "2026-04-07"
+        vatRate:
+          type: integer
+          description: Единая ставка НДС для всего документа
+          example: 20
+
+        # 3. Итоги (Рассчитаны бэкендом, Read-only для UI)
+        totalVatAmount:
+          type: number
+          format: float
+          example: 1200.00
+        totalWithVat:
+          type: number
+          format: float
+          example: 7200.00
+
+        # 4. Позиции
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceLineResponseDTO'
+
+    InvoiceLineResponseDTO:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: ID строки для идентификации при обновлениях
+        productName:
+          type: string
+          example: "Лицензия на ПО (Годовая)"
+        unit:
+          type: string
+          example: "шт"
+        quantity:
+          type: number
+          format: float
+          example: 5
+        unitPrice:
+          type: number
+          format: float
+          example: 1000.00
+        # Вычисляемые поля (только в ответе)
+        amountWithoutVat:
+          type: number
+          format: float
+          example: 5000.00
+        vatAmount:
+          type: number
+          format: float
+          example: 1000.00
+        totalAmount:
+          type: number
+          format: float
+          example: 6000.00
+
+    # ---------------------------------------------------------
+    # МОДЕЛИ ДЛЯ ЗАПРОСА (PUT Request)
+    # ---------------------------------------------------------
+    UpdateInvoiceRequest:
+      type: object
+      required:
+        - sequenceNumber
+        - issueDate
+        - counterpartyId
+        - vatRate
+        - departmentId
+        - version
+        - lines
+      properties:
+        version:
+          type: integer
+          description: Обязательное поле. Фронтенд должен передать текущую версию, которую он редактирует. Бэкенд сверяет ее с БД. Если в БД версия больше (кто-то уже сохранил документ), PUT отклоняется (409 Conflict).
+          example: 3
+        sequenceNumber:
+          type: string
+          example: "765"
+        departmentId:
+          type: string
+          format: uuid
+        issueDate:
+          type: string
+          format: date
+          example: "2026-04-07"
+        counterpartyId:
+          type: string
+          format: uuid
+          description: ИНН и Адрес бэкенд подтянет сам на основе этого ID
+        paymentDocNumber:
+          type: string
+          nullable: true
+          example: "ПП-12345"
+        paymentDocDate:
+          type: string
+          format: date
+          nullable: true
+          example: "2026-04-07"
+        vatRate:
+          type: integer
+          example: 20
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceLineRequestDTO'
+
+    PatchInvoiceRequest:
+      type: object
+      required:
+        # Для PATCH большинство полей опциональны, но версия для Lock'а обязательна
+        - version
+      properties:
+        # --- Системные поля версионирования ---
+        version:
+          type: integer
+          description: Текущая версия документа, которую редактирует пользователь (для Optimistic Lock).
+          example: 3
+        versionAuthor:
+          type: string
+          description: ФИО автора изменений (если бэкенд не извлекает это сам из JWT токена).
+          example: "Анна Иванова"
+        versionComment:
+          type: string
+          description: Описание того, что было изменено в этой версии.
+          example: "Обновлены наименования товаров и количество"
+          
+        # --- Бизнес-поля (все опциональные, отправляются только если изменились) ---
+        issueDate:
+          type: string
+          format: date
+          example: "2026-04-07"
+        counterpartyId:
+          type: string
+          format: uuid
+        paymentDocNumber:
+          type: string
+          nullable: true
+          example: "ПП-12345"
+        paymentDocDate:
+          type: string
+          format: date
+          nullable: true
+          example: "2026-04-07"
+        departmentId:
+          type: string
+          format: uuid
+          nullable: true
+          example: "2026-04-07"
+          
+        # --- Массив позиций ---
+        lines:
+          type: array
+          description: При передаче массива `lines`, сервер полностью заменяет текущие позиции на присланные.
+          items:
+            $ref: '#/components/schemas/InvoiceLineRequestDTO'
+
+    InvoiceLineRequestDTO:
+      type: object
+      required:
+        - productName
+        - unit
+        - quantity
+        - unitPrice
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: ID существующей строки. Если null/отсутствует — сервер создаст новую позицию.
+          nullable: true
+        productName:
+          type: string
+          example: "Лицензия на ПО (Годовая)"
+        unit:
+          type: string
+          example: "шт"
+        quantity:
+          type: number
+          format: float
+          example: 5
+        unitPrice:
+          type: number
+          format: float
+          example: 1000.00
+    # --- ДЛЯ СПИСКА (ТАБЛИЦА) ---
+    UserListItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        fullName:
+          type: string
+          example: "Anna Ivanova"
+        email:
+          type: string
+          format: email
+          example: "anna.ivanova@company.com"
+        role:
+          type: string
+          enum: [user, admin]
+          example: "user"
+        # Изменено здесь: теперь это массив объектов, а не строк
+        departments:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+                example: "550e8400-e29b-41d4-a716-446655440000"
+              name:
+                type: string
+                example: "Бухгалтерия"
+        createdAt:
+          type: string
+          format: date
+          example: "2025-01-15"
+
+    UserPaginatedResponse:
+      type: object
+      properties:
+        totalElements:
+          type: integer
+        totalPages:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserListItem'
+
+    # --- ДЛЯ ПРОСМОТРА ОДНОГО (ФОРМА РЕДАКТИРОВАНИЯ) ---
+    UserDetailResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        fullName:
+          type: string
+          example: "Anna Ivanova"
+        email:
+          type: string
+          format: email
+          example: "anna.ivanova@company.com"
+        role:
+          type: string
+          enum: [user, admin]
+        departmentIds:
+          type: array
+          description: Массив ID департаментов для простановки чекбоксов.
+          items:
+            type: string
+            format: uuid
+
+    # --- ДЛЯ СОЗДАНИЯ ---
+    CreateUserRequest:
+      type: object
+      required:
+        - fullName
+        - email
+        - password
+        - role
+        - departmentIds
+      properties:
+        fullName:
+          type: string
+          example: "Anna Ivanova"
+        email:
+          type: string
+          format: email
+          example: "anna.ivanova@company.com"
+        password:
+          type: string
+          format: password
+          minLength: 8
+        role:
+          type: string
+          enum: [user, admin]
+        departmentIds:
+          type: array
+          minItems: 1
+          description: Обязательно выбрать минимум один департамент.
+          items:
+            type: string
+            format: uuid
+
+    # --- ДЛЯ ОБНОВЛЕНИЯ ---
+    UpdateUserRequest:
+      type: object
+      required:
+        - fullName
+        - email
+        - role
+        - departmentIds
+      properties:
+        fullName:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+          nullable: true
+          description: Оставить пустым/null для сохранения текущего пароля.
+        role:
+          type: string
+          enum: [user, admin]
+        departmentIds:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            format: uuid
