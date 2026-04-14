@@ -9,8 +9,8 @@ export function Header() {
   return (
     <header className="header">
       <div className="header__inner">
-        <Link to="/login" className="header__brand" aria-label="Перейти на страницу входа">
-          <span className="header__brand-mark" />
+        <Link to="/invoice-list" className="header__brand" aria-label="Перейти к списку счетов-фактур">
+          <img src="/logo.png" alt="" className="header__brand-logo" />
           <span>Alfa Orchestrator</span>
         </Link>
 

@@ -67,7 +67,7 @@ export function LogInPage() {
 
       toast.success(`Вход выполнен: ${response.user.username} (${response.user.role}).`);
       setValues((current) => ({ ...current, password: '' }));
-      navigate('/dashboard');
+      navigate('/invoice-list');
     } catch (error) {
       if (isAxiosError(error) && error.response?.status === 401) {
         toast.error('Неверный логин или пароль.');
