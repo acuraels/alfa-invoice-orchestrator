@@ -45,3 +45,7 @@ button {
 #root {
   min-height: 100vh;
 }
+
+img {
+  user-select: none;
+}

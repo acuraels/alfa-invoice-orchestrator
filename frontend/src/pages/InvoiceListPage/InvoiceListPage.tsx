@@ -130,11 +130,6 @@ export function InvoiceListPage() {
       <main className="page invoice-list-page">
         <div className="invoice-list-page__container">
           <section className="invoice-list-page__main">
-            <div className="invoice-list-page__hero">
-              <h1>Список проектов</h1>
-              <p>Управление счетами-фактурами</p>
-            </div>
-
             <div className="invoice-tabs" role="tablist" aria-label="Список счетов-фактур">
               <button
                 type="button"
