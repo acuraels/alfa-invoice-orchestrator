@@ -198,6 +198,12 @@ paths:
           schema:
             type: string
           description: Уникальный номер счета-фактуры (PK).
+        - in: query
+          name: version
+          required: true
+          schema:
+            type: integer
+          description: Версия счета-фактуры
       responses:
         '200':
           description: Данные успешно получены
