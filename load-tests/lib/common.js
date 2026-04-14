@@ -112,12 +112,19 @@ export function sendBatch(token) {
   const payload = [];
   while (payload.length < BATCH_SIZE) {
     const drf = `K6-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    payload.push(...createGroup(drf));
+    const group = createGroup(drf);
+    if (payload.length > 0 && payload.length + group.length > BATCH_SIZE) {
+      break;
+    }
+    payload.push(...group);
+    if (payload.length >= BATCH_SIZE) {
+      break;
+    }
   }
 
   const response = http.post(
     `${BASE_URL}/api/v1/ingest/transactions`,
-    JSON.stringify(payload.slice(0, BATCH_SIZE)),
+    JSON.stringify(payload),
     {
       headers: {
         'Content-Type': 'application/json',

@@ -6,7 +6,7 @@ paths:
   /api/v1/invoices:
     get:
       summary: Получение списка счетов-фактур (Реестр)
-      description: Возвращает список документов согласно примененным фильтрам и параметрам пагинации. Вкладка "К обработке" фильтрует статусы `project_created` и `validating_error`. Вкладка "Обработано" фильтрует статусы `invoice_created`, `sending_error` и `sent`.
+      description: Возвращает список документов от департаментов, в которых состоит пользователь, согласно примененным фильтрам и параметрам пагинации. Вкладка "К обработке" фильтрует статусы `project_created` и `validating_error`. Вкладка "Обработано" фильтрует статусы `invoice_created`, `sending_error` и `sent`.
       parameters:
         - in: query
           name: tab
@@ -198,6 +198,12 @@ paths:
           schema:
             type: string
           description: Уникальный номер счета-фактуры (PK).
+        - in: query
+          name: version
+          required: false
+          schema:
+            type: integer
+          description: Версия счета-фактуры. Если версия не указана, возвращается последняя.
       responses:
         '200':
           description: Данные успешно получены

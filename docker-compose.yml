@@ -53,6 +53,9 @@ services:
       POSTGRES_PORT: 5432
       CELERY_BROKER_URL: amqp://${RABBITMQ_DEFAULT_USER:-guest}:${RABBITMQ_DEFAULT_PASS:-guest}@rabbitmq:5672//
       CELERY_RESULT_BACKEND: rpc://
+      CELERY_TRANSACTIONS_QUEUE: ${CELERY_TRANSACTIONS_QUEUE:-transactions}
+      CELERY_MATERIALIZATION_QUEUE: ${CELERY_MATERIALIZATION_QUEUE:-materialization}
+      CELERY_MAINTENANCE_QUEUE: ${CELERY_MAINTENANCE_QUEUE:-maintenance}
       CORS_ALLOW_ALL_ORIGINS: "true"
       PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus_multiproc
     working_dir: /app/backend
@@ -109,8 +112,44 @@ services:
       POSTGRES_PORT: 5432
       CELERY_BROKER_URL: amqp://${RABBITMQ_DEFAULT_USER:-guest}:${RABBITMQ_DEFAULT_PASS:-guest}@rabbitmq:5672//
       CELERY_RESULT_BACKEND: rpc://
+      CELERY_TRANSACTIONS_QUEUE: ${CELERY_TRANSACTIONS_QUEUE:-transactions}
+      CELERY_MATERIALIZATION_QUEUE: ${CELERY_MATERIALIZATION_QUEUE:-materialization}
+      CELERY_MAINTENANCE_QUEUE: ${CELERY_MAINTENANCE_QUEUE:-maintenance}
+      CELERY_WORKER_TRANSACTIONS_CONCURRENCY: ${CELERY_WORKER_TRANSACTIONS_CONCURRENCY:-4}
       PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus_multiproc
     command: ["/app/entrypoint.sh", "worker"]
+    working_dir: /app/backend
+    volumes:
+      - ./backend:/app/backend
+      - ./entrypoint.sh:/app/entrypoint.sh:ro
+      - ./scripts:/app/scripts
+      - ./artifacts:/app/artifacts
+      - prometheus_multiproc:/tmp/prometheus_multiproc
+
+  worker_materialization:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    container_name: alfa-invoice-worker-materialization
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      CELERY_BROKER_URL: amqp://${RABBITMQ_DEFAULT_USER:-guest}:${RABBITMQ_DEFAULT_PASS:-guest}@rabbitmq:5672//
+      CELERY_RESULT_BACKEND: rpc://
+      CELERY_TRANSACTIONS_QUEUE: ${CELERY_TRANSACTIONS_QUEUE:-transactions}
+      CELERY_MATERIALIZATION_QUEUE: ${CELERY_MATERIALIZATION_QUEUE:-materialization}
+      CELERY_MAINTENANCE_QUEUE: ${CELERY_MAINTENANCE_QUEUE:-maintenance}
+      CELERY_WORKER_MATERIALIZATION_CONCURRENCY: ${CELERY_WORKER_MATERIALIZATION_CONCURRENCY:-2}
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus_multiproc
+    command: ["/app/entrypoint.sh", "worker-materialization"]
     working_dir: /app/backend
     volumes:
       - ./backend:/app/backend
@@ -137,6 +176,10 @@ services:
       POSTGRES_PORT: 5432
       CELERY_BROKER_URL: amqp://${RABBITMQ_DEFAULT_USER:-guest}:${RABBITMQ_DEFAULT_PASS:-guest}@rabbitmq:5672//
       CELERY_RESULT_BACKEND: rpc://
+      CELERY_TRANSACTIONS_QUEUE: ${CELERY_TRANSACTIONS_QUEUE:-transactions}
+      CELERY_MATERIALIZATION_QUEUE: ${CELERY_MATERIALIZATION_QUEUE:-materialization}
+      CELERY_MAINTENANCE_QUEUE: ${CELERY_MAINTENANCE_QUEUE:-maintenance}
+      CELERY_BEAT_SCHEDULE_FILE: /tmp/celerybeat-schedule
       PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus_multiproc
     command: ["/app/entrypoint.sh", "beat"]
     working_dir: /app/backend

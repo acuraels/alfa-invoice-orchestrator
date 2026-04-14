@@ -62,7 +62,8 @@ Layer 2 используется Web Service/Web App для чтения, отч
 
 - `nginx` (gateway)
 - `backend` (Django + DRF + /metrics)
-- `worker` (Celery consumer)
+- `worker` (Celery consumer, queue `transactions`)
+- `worker_materialization` (Celery consumer, queues `materialization,maintenance`)
 - `beat` (cron-daemon)
 - `postgres`
 - `rabbitmq` (+ management)
@@ -111,7 +112,9 @@ make seed
 - Department IDs: `101..104` (`factoring/accounting/taxation/acquiring`)
 - Counterparty IDs: `10001..10005`
 - admin user из `.env`
-- demo role users (`factoring_user`, `accounting_user`, `taxation_user`, `acquiring_user`, пароль `password`)
+- demo role users (`factoring_user`, `accounting_user`, `taxation_user`, `acquiring_user`, пароль из `DEMO_USER_PASSWORD`, по умолчанию `password`)
+
+Команда `make seed` после выполнения печатает все логины/пароли в консоль.
 
 ## 9) Admin
 
@@ -164,6 +167,12 @@ make smoke
 make steady
 make burst
 make longrun
+```
+
+Если нужно явно передать логин/пароль:
+
+```bash
+make smoke K6_USERNAME=admin K6_PASSWORD=AdminPassword123
 ```
 
 Артефакты:

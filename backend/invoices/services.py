@@ -478,6 +478,18 @@ def generate_invoice_number(*, department: Department, date, version: str = "00"
             return f"{version}/{department.mnemonic}/{date.strftime('%d%m%y')}/{seq.last_value:08d}"
 
 
+def _mark_draft_and_group_materialized(draft: DraftInvoice, materialized_at=None) -> None:
+    ts = materialized_at or timezone.now()
+    draft.status = DraftInvoice.Status.MATERIALIZED
+    draft.validation_error = ""
+    draft.materialized_at = draft.materialized_at or ts
+    draft.save(update_fields=["status", "validation_error", "materialized_at", "updated_at"])
+
+    draft.group.status = AggregationGroup.Status.MATERIALIZED
+    draft.group.last_processed_at = timezone.now()
+    draft.group.save(update_fields=["status", "last_processed_at", "updated_at"])
+
+
 def materialize_draft_invoice(draft: DraftInvoice) -> FinalInvoice | None:
     started = perf_counter()
     job = MaterializationJob.objects.create(
@@ -490,10 +502,19 @@ def materialize_draft_invoice(draft: DraftInvoice) -> FinalInvoice | None:
     try:
         with transaction.atomic():
             if hasattr(draft, "final_invoice"):
+                final_invoice = draft.final_invoice
+                ExportRecord.objects.get_or_create(
+                    final_invoice=final_invoice,
+                    defaults={
+                        "status": ExportRecord.Status.READY,
+                        "destination": "csv",
+                    },
+                )
+                _mark_draft_and_group_materialized(draft, materialized_at=final_invoice.materialized_at)
                 job.status = MaterializationJob.Status.SUCCESS
                 job.finished_at = timezone.now()
                 job.save(update_fields=["status", "finished_at"])
-                return draft.final_invoice
+                return final_invoice
 
             invoice_number = generate_invoice_number(
                 department=draft.department,
@@ -557,13 +578,7 @@ def materialize_draft_invoice(draft: DraftInvoice) -> FinalInvoice | None:
                 new_value=invoice_number,
             )
 
-            draft.status = DraftInvoice.Status.MATERIALIZED
-            draft.materialized_at = timezone.now()
-            draft.save(update_fields=["status", "materialized_at", "updated_at"])
-
-            draft.group.status = AggregationGroup.Status.MATERIALIZED
-            draft.group.last_processed_at = timezone.now()
-            draft.group.save(update_fields=["status", "last_processed_at", "updated_at"])
+            _mark_draft_and_group_materialized(draft)
 
             job.status = MaterializationJob.Status.SUCCESS
             job.finished_at = timezone.now()
