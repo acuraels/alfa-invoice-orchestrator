@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { isAxiosError } from 'axios';
 import toast from 'react-hot-toast';
-import { Lock, ShieldCheck } from 'lucide-react';
+import { Eye, EyeOff, Lock, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../../services/authService';
 import './LogInPage.css';
@@ -23,6 +23,7 @@ export function LogInPage() {
   const [values, setValues] = useState<FormValues>(initialValues);
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
 
   const validate = (formValues: FormValues) => {
     const nextErrors: FormErrors = {};
@@ -97,7 +98,7 @@ export function LogInPage() {
               type="text"
               value={values.login}
               onChange={(event) => handleChange('login', event.target.value)}
-              placeholder="ivanov_aa"
+              placeholder="login"
               autoComplete="username"
               disabled={isSubmitting}
               className={errors.login ? 'login-page__input login-page__input--error' : 'login-page__input'}
@@ -107,15 +108,31 @@ export function LogInPage() {
 
           <label className="login-page__group">
             <span>Пароль</span>
-            <input
-              type="password"
-              value={values.password}
-              onChange={(event) => handleChange('password', event.target.value)}
-              placeholder="SuperSecretPassword123"
-              autoComplete="current-password"
-              disabled={isSubmitting}
-              className={errors.password ? 'login-page__input login-page__input--error' : 'login-page__input'}
-            />
+            <div className="login-page__password-field">
+              <input
+                type={isPasswordVisible ? 'text' : 'password'}
+                value={values.password}
+                onChange={(event) => handleChange('password', event.target.value)}
+                placeholder="••••••"
+                autoComplete="current-password"
+                disabled={isSubmitting}
+                className={
+                  errors.password
+                    ? 'login-page__input login-page__input--password login-page__input--error'
+                    : 'login-page__input login-page__input--password'
+                }
+              />
+              <button
+                type="button"
+                className="login-page__password-toggle"
+                onClick={() => setIsPasswordVisible((current) => !current)}
+                aria-label={isPasswordVisible ? 'Скрыть пароль' : 'Показать пароль'}
+                aria-pressed={isPasswordVisible}
+                disabled={isSubmitting}
+              >
+                {isPasswordVisible ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
             {errors.password && <small className="login-page__error">{errors.password}</small>}
           </label>
 
