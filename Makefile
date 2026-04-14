@@ -3,8 +3,8 @@ SHELL := /bin/bash
 COUNT ?= 1000
 FILE ?= artifacts/load-tests/transactions.jsonl
 BASE_URL ?= http://localhost:8080
-USERNAME ?= admin
-PASSWORD ?= AdminPassword123
+K6_USERNAME ?= admin
+K6_PASSWORD ?= AdminPassword123
 BATCH_SIZE ?= 50
 
 K6_DOCKER := docker run --rm -i --network=host --user $(shell id -u):$(shell id -g) -v $(PWD):/work -w /work/load-tests grafana/k6:0.57.0
@@ -63,22 +63,22 @@ k6-precheck:
 smoke:
 	@$(MAKE) k6-precheck BASE_URL=$(BASE_URL)
 	mkdir -p artifacts/load-tests
-	$(K6_DOCKER) run --summary-export /work/artifacts/load-tests/smoke_summary.json -e BASE_URL=$(BASE_URL) -e USERNAME=$(USERNAME) -e PASSWORD=$(PASSWORD) -e BATCH_SIZE=$(BATCH_SIZE) smoke.js
+	$(K6_DOCKER) run --summary-export /work/artifacts/load-tests/smoke_summary.json -e BASE_URL=$(BASE_URL) -e USERNAME=$(K6_USERNAME) -e PASSWORD=$(K6_PASSWORD) -e BATCH_SIZE=$(BATCH_SIZE) smoke.js
 
 steady:
 	@$(MAKE) k6-precheck BASE_URL=$(BASE_URL)
 	mkdir -p artifacts/load-tests
-	$(K6_DOCKER) run --summary-export /work/artifacts/load-tests/steady_summary.json -e BASE_URL=$(BASE_URL) -e USERNAME=$(USERNAME) -e PASSWORD=$(PASSWORD) -e BATCH_SIZE=$(BATCH_SIZE) steady.js
+	$(K6_DOCKER) run --summary-export /work/artifacts/load-tests/steady_summary.json -e BASE_URL=$(BASE_URL) -e USERNAME=$(K6_USERNAME) -e PASSWORD=$(K6_PASSWORD) -e BATCH_SIZE=$(BATCH_SIZE) steady.js
 
 burst:
 	@$(MAKE) k6-precheck BASE_URL=$(BASE_URL)
 	mkdir -p artifacts/load-tests
-	$(K6_DOCKER) run --summary-export /work/artifacts/load-tests/burst_summary.json -e BASE_URL=$(BASE_URL) -e USERNAME=$(USERNAME) -e PASSWORD=$(PASSWORD) -e BATCH_SIZE=$(BATCH_SIZE) burst.js
+	$(K6_DOCKER) run --summary-export /work/artifacts/load-tests/burst_summary.json -e BASE_URL=$(BASE_URL) -e USERNAME=$(K6_USERNAME) -e PASSWORD=$(K6_PASSWORD) -e BATCH_SIZE=$(BATCH_SIZE) burst.js
 
 longrun:
 	@$(MAKE) k6-precheck BASE_URL=$(BASE_URL)
 	mkdir -p artifacts/load-tests
-	$(K6_DOCKER) run --summary-export /work/artifacts/load-tests/longrun_summary.json -e BASE_URL=$(BASE_URL) -e USERNAME=$(USERNAME) -e PASSWORD=$(PASSWORD) -e BATCH_SIZE=$(BATCH_SIZE) long-run.js
+	$(K6_DOCKER) run --summary-export /work/artifacts/load-tests/longrun_summary.json -e BASE_URL=$(BASE_URL) -e USERNAME=$(K6_USERNAME) -e PASSWORD=$(K6_PASSWORD) -e BATCH_SIZE=$(BATCH_SIZE) long-run.js
 
 bench-summary:
 	docker compose exec backend python manage.py bench_summary --output-dir /app/artifacts/load-tests --prometheus-url http://prometheus:9090

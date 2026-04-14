@@ -2,6 +2,12 @@
 set -eu
 
 ROLE="${1:-web}"
+TRANSACTIONS_QUEUE="${CELERY_TRANSACTIONS_QUEUE:-transactions}"
+MATERIALIZATION_QUEUE="${CELERY_MATERIALIZATION_QUEUE:-materialization}"
+MAINTENANCE_QUEUE="${CELERY_MAINTENANCE_QUEUE:-maintenance}"
+WORKER_TX_CONCURRENCY="${CELERY_WORKER_TRANSACTIONS_CONCURRENCY:-4}"
+WORKER_MATERIALIZATION_CONCURRENCY="${CELERY_WORKER_MATERIALIZATION_CONCURRENCY:-2}"
+BEAT_SCHEDULE_FILE="${CELERY_BEAT_SCHEDULE_FILE:-/tmp/celerybeat-schedule}"
 
 cd /app/backend
 
@@ -43,11 +49,21 @@ case "$ROLE" in
     ;;
   worker)
     wait_for_db
-    exec celery -A backend worker -l info -Q transactions
+    exec celery -A backend worker -l info \
+      -Q "$TRANSACTIONS_QUEUE" \
+      --concurrency "$WORKER_TX_CONCURRENCY" \
+      --hostname "worker.transactions@%h"
+    ;;
+  worker-materialization)
+    wait_for_db
+    exec celery -A backend worker -l info \
+      -Q "$MATERIALIZATION_QUEUE,$MAINTENANCE_QUEUE" \
+      --concurrency "$WORKER_MATERIALIZATION_CONCURRENCY" \
+      --hostname "worker.materialization@%h"
     ;;
   beat)
     wait_for_db
-    exec celery -A backend beat -l info
+    exec celery -A backend beat -l info --schedule "$BEAT_SCHEDULE_FILE"
     ;;
   *)
     exec "$@"

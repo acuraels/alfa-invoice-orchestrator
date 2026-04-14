@@ -139,21 +139,31 @@ CORS_ALLOW_ALL_ORIGINS = get_bool_env("CORS_ALLOW_ALL_ORIGINS", True)
 
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "amqp://guest:guest@rabbitmq:5672//")
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "rpc://")
-CELERY_TASK_DEFAULT_QUEUE = os.getenv("CELERY_TASK_DEFAULT_QUEUE", "transactions")
+CELERY_TRANSACTIONS_QUEUE = os.getenv("CELERY_TRANSACTIONS_QUEUE", "transactions")
+CELERY_MATERIALIZATION_QUEUE = os.getenv("CELERY_MATERIALIZATION_QUEUE", "materialization")
+CELERY_MAINTENANCE_QUEUE = os.getenv("CELERY_MAINTENANCE_QUEUE", "maintenance")
+CELERY_TASK_DEFAULT_QUEUE = CELERY_TRANSACTIONS_QUEUE
 CELERY_TASK_ACKS_LATE = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_ALWAYS_EAGER = get_bool_env("CELERY_TASK_ALWAYS_EAGER", "test" in sys.argv)
 CELERY_TASK_EAGER_PROPAGATES = True
+CELERY_TASK_ROUTES = {
+    "invoices.process_transaction": {"queue": CELERY_TRANSACTIONS_QUEUE},
+    "invoices.materialize_ready_drafts": {"queue": CELERY_MATERIALIZATION_QUEUE},
+    "invoices.retry_failed_drafts": {"queue": CELERY_MAINTENANCE_QUEUE},
+}
 CELERY_BEAT_SCHEDULE = {
     "materialize-ready-drafts": {
         "task": "invoices.materialize_ready_drafts",
         "schedule": 20.0,
         "args": (200,),
+        "options": {"queue": CELERY_MATERIALIZATION_QUEUE},
     },
     "retry-failed-drafts": {
         "task": "invoices.retry_failed_drafts",
         "schedule": crontab(minute="*/1"),
         "args": (100,),
+        "options": {"queue": CELERY_MAINTENANCE_QUEUE},
     },
 }
