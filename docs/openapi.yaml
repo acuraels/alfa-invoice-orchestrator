@@ -200,10 +200,10 @@ paths:
           description: Уникальный номер счета-фактуры (PK).
         - in: query
           name: version
-          required: true
+          required: false
           schema:
             type: integer
-          description: Версия счета-фактуры
+          description: Версия счета-фактуры. Если версия не указана, возвращается последняя.
       responses:
         '200':
           description: Данные успешно получены
