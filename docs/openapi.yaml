@@ -6,7 +6,7 @@ paths:
   /api/v1/invoices:
     get:
       summary: Получение списка счетов-фактур (Реестр)
-      description: Возвращает список документов согласно примененным фильтрам и параметрам пагинации. Вкладка "К обработке" фильтрует статусы `project_created` и `validating_error`. Вкладка "Обработано" фильтрует статусы `invoice_created`, `sending_error` и `sent`.
+      description: Возвращает список документов от департаментов, в которых состоит пользователь, согласно примененным фильтрам и параметрам пагинации. Вкладка "К обработке" фильтрует статусы `project_created` и `validating_error`. Вкладка "Обработано" фильтрует статусы `invoice_created`, `sending_error` и `sent`.
       parameters:
         - in: query
           name: tab
