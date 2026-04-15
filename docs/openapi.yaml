@@ -18,6 +18,30 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/DepartmentListItem'
+                  
+  /api/v1/invoices/{number}/versions:
+    get:
+      summary: Получение истории версий счета-фактуры
+      description: Возвращает список всех сохраненных версий документа. Данные используются для выпадающего списка выбора версий и отображения информации об авторе и комментариях к изменениям. Сортировка должна быть по убыванию (от новых к старым).
+      parameters:
+        - in: path
+          name: number
+          required: true
+          schema:
+            type: string
+          description: Уникальный номер счета-фактуры.
+      responses:
+        '200':
+          description: История версий успешно получена.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/InvoiceVersionListItem'
+        '404':
+          description: Документ не найден.
+          
   /api/v1/invoices:
     get:
       summary: Получение списка счетов-фактур (Реестр)
@@ -824,3 +848,29 @@ components:
             type: string
             description: Название департамента для отображения в UI
             example: "IT Division"
+
+
+      InvoiceVersionListItem:
+        type: object
+        required:
+          - version
+          - updatedAt
+          - author
+        properties:
+          version:
+            type: integer
+            description: Номер версии документа.
+            example: 3
+          updatedAt:
+            type: string
+            format: date-time
+            description: Дата и время создания данной версии.
+            example: "2026-04-09T14:30:00Z"
+          author:
+            type: string
+            description: Имя или ФИО пользователя, создавшего версию.
+            example: "Анна Иванова"
+          comment:
+            type: string
+            description: Текстовое описание того, что было изменено.
+            example: "Обновлены наименования товаров и количество"
