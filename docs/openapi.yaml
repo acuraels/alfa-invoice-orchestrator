@@ -73,21 +73,30 @@ paths:
           description: Конечная дата для фильтрации (включительно). Формат ГГГГ-ММ-ДД.
         - in: query
           name: status
+          description: Список статусов для фильтрации. Если передано несколько, применяется логика OR (ИЛИ). Если не передано, фильтрация идет по умолчанию согласно вкладке `tab`.
           schema:
-            type: string
-            enum: 
-              - project_created
-              - validating_error
-              - invoice_created
-              - sending_error
-              - sent
-          description: Явный фильтр по статусу (должен не противоречить выбранной вкладке `tab`).
+            type: array
+            items:
+              type: string
+              enum: 
+                - project_created
+                - validating_error
+                - invoice_created
+                - sending_error
+                - sent
+            style: form
+            explode: true
+            
         - in: query
           name: departmentId
+          description: Список ID департаментов для фильтрации. Если передано несколько, применяется логика OR (ИЛИ).
           schema:
-            type: string
-            format: uuid
-          description: ID департамента для фильтрации.
+            type: array
+            items:
+              type: string
+              format: uuid
+            style: form
+            explode: true
         - in: query
           name: page
           schema:
@@ -288,7 +297,7 @@ paths:
         - in: path
           name: number
           required: true
-          schema:
+          schaema:
             type: string
       # Опционально: можно передавать тело UpdateInvoiceRequest, чтобы сэкономить один PUT запрос перед утверждением, 
       # но классический REST подразумевает сначала сохранение (PUT), затем смену состояния (POST).
