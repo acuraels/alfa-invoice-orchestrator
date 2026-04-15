@@ -79,27 +79,27 @@ class Command(BaseCommand):
                 ("taxation_user", "taxation"),
                 ("acquiring_user", "acquiring"),
             ]
-            for username, role in demo_users:
+            for username, department_code in demo_users:
                 user, user_created = User.objects.get_or_create(
                     username=username,
                     defaults={
                         "email": f"{username}@example.com",
-                        "role": role,
+                        "role": "user",
                         "is_active": True,
                     },
                 )
                 user.email = f"{username}@example.com"
-                user.role = role
+                user.role = "user"
                 user.is_active = True
                 user.set_password(demo_password)
                 user.save()
-                department = Department.objects.get(code=role)
+                department = Department.objects.get(code=department_code)
                 DepartmentAccess.objects.update_or_create(
                     user=user,
                     department=department,
-                    defaults={"role": role},
+                    defaults={"role": "user"},
                 )
-                created_demo_users.append((username, role, user_created))
+                created_demo_users.append((username, department_code, user_created))
 
         self.stdout.write(self.style.SUCCESS("Seed completed"))
         self.stdout.write("Credentials:")

@@ -1,31 +1,23 @@
-from collections.abc import Mapping
-
-ROLE_DEPARTMENT_MAP: Mapping[str, str] = {
-    "factoring": "factoring",
-    "accounting": "accounting",
-    "taxation": "taxation",
-    "acquiring": "acquiring",
-}
-
-
-def get_department_for_role(role: str | None) -> str | None:
-    if role is None:
-        return None
-    return ROLE_DEPARTMENT_MAP.get(role)
-
-
 def filter_queryset_by_role(queryset, user, department_field: str = "department"):
     if not getattr(user, "is_authenticated", False):
         return queryset.none()
 
-    if getattr(user, "is_superuser", False) or getattr(user, "role", None) == "admin":
+    if getattr(user, "is_superuser", False):
         return queryset
 
-    department = get_department_for_role(getattr(user, "role", None))
-    if department is None:
+    departments = getattr(user, "departments", None)
+    if departments is None:
         return queryset.none()
 
-    return queryset.filter(**{department_field: department})
+    if department_field.endswith("__code"):
+        department_values = list(departments.values_list("code", flat=True))
+    else:
+        department_values = list(departments.values_list("id", flat=True))
+
+    if not department_values:
+        return queryset.none()
+
+    return queryset.filter(**{f"{department_field}__in": department_values})
 
 
 class RoleScopedQuerysetMixin:

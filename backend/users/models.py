@@ -2,6 +2,7 @@ from django.contrib.auth.models import AbstractUser, UserManager as DjangoUserMa
 from django.db import models
 
 ADMIN_ROLE = "admin"
+USER_ROLE = "user"
 
 
 class UserManager(DjangoUserManager):
@@ -26,12 +27,16 @@ class UserManager(DjangoUserManager):
 class User(AbstractUser):
     class Roles(models.TextChoices):
         ADMIN = "admin", "Admin"
-        FACTORING = "factoring", "Factoring"
-        ACCOUNTING = "accounting", "Accounting"
-        TAXATION = "taxation", "Taxation"
-        ACQUIRING = "acquiring", "Acquiring"
+        USER = "user", "User"
 
     role = models.CharField(max_length=32, choices=Roles.choices)
+    full_name = models.CharField(max_length=255, blank=True, default="")
+    departments = models.ManyToManyField(
+        "invoices.Department",
+        through="invoices.DepartmentAccess",
+        related_name="users",
+        blank=True,
+    )
 
     objects = UserManager()
 
