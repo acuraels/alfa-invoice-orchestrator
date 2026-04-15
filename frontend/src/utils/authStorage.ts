@@ -37,6 +37,10 @@ export function updateAccessToken(accessToken: string) {
   localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
 }
 
+export function updateStoredUser(user: AuthUser) {
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
 export function clearAuthStorage() {
   localStorage.removeItem(ACCESS_TOKEN_KEY);
   localStorage.removeItem(REFRESH_TOKEN_KEY);

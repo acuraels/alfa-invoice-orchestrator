@@ -26,7 +26,7 @@ function App() {
         <Route path="/logout" element={<LogOutPage />} />
         <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
-        <Route element={<ProtectedRoute allowedRoles={['admin', 'factoring', 'accounting', 'taxation', 'acquiring']} />}>
+        <Route element={<ProtectedRoute allowedRoles={['admin', 'user']} />}>
           <Route path="/invoice-list" element={<InvoiceListPage />} />
           <Route path="/invoice-list/:id" element={<InvoiceDetailsPage />} />
         </Route>

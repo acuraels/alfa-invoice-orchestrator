@@ -7,14 +7,14 @@ import { authService } from '../../services/authService';
 import './LogInPage.css';
 
 type FormValues = {
-  login: string;
+  username: string;
   password: string;
 };
 
 type FormErrors = Partial<Record<keyof FormValues, string>>;
 
 const initialValues: FormValues = {
-  login: '',
+  username: '',
   password: '',
 };
 
@@ -28,8 +28,8 @@ export function LogInPage() {
   const validate = (formValues: FormValues) => {
     const nextErrors: FormErrors = {};
 
-    if (!formValues.login.trim()) {
-      nextErrors.login = 'Введите логин.';
+    if (!formValues.username.trim()) {
+      nextErrors.username = 'Введите email или логин.';
     }
 
     if (!formValues.password.trim()) {
@@ -62,13 +62,14 @@ export function LogInPage() {
       setIsSubmitting(true);
 
       const response = await authService.login({
-        username: values.login.trim(),
+        username: values.username.trim(),
         password: values.password,
       });
 
-      toast.success(`Вход выполнен: ${response.user.username} (${response.user.role}).`);
+      const userLabel = response.user.full_name ?? response.user.username;
+      toast.success(`Вход выполнен: ${userLabel} (${response.user.role}).`);
       setValues((current) => ({ ...current, password: '' }));
-      navigate('/invoice-list');
+      navigate('/invoice-list', { replace: true });
     } catch (error) {
       if (isAxiosError(error) && error.response?.status === 401) {
         toast.error('Неверный логин или пароль.');
@@ -93,17 +94,17 @@ export function LogInPage() {
 
         <form className="login-page__form" onSubmit={handleSubmit} noValidate>
           <label className="login-page__group">
-            <span>Логин</span>
+            <span>Email или логин</span>
             <input
               type="text"
-              value={values.login}
-              onChange={(event) => handleChange('login', event.target.value)}
-              placeholder="login"
+              value={values.username}
+              onChange={(event) => handleChange('username', event.target.value)}
+              placeholder="anna.ivanova@example.com"
               autoComplete="username"
               disabled={isSubmitting}
-              className={errors.login ? 'login-page__input login-page__input--error' : 'login-page__input'}
+              className={errors.username ? 'login-page__input login-page__input--error' : 'login-page__input'}
             />
-            {errors.login && <small className="login-page__error">{errors.login}</small>}
+            {errors.username && <small className="login-page__error">{errors.username}</small>}
           </label>
 
           <label className="login-page__group">

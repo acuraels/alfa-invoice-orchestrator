@@ -5,6 +5,7 @@ import axios, {
 } from 'axios';
 import type { RefreshResponse } from '../types/auth';
 import { clearAuthStorage, getAccessToken, getRefreshToken, updateAccessToken } from './authStorage';
+import { isJwtExpired } from './jwt';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080';
 const LOGIN_URL = '/api/auth/login/';
@@ -46,7 +47,8 @@ function setAuthorizationHeader(config: AxiosRequestConfig, token: string) {
 async function requestTokenRefresh() {
   const refreshToken = getRefreshToken();
 
-  if (!refreshToken) {
+  if (!refreshToken || isJwtExpired(refreshToken)) {
+    clearAuthStorage();
     throw new Error('Refresh token is missing');
   }
 
@@ -61,7 +63,7 @@ async function requestTokenRefresh() {
 axiosInstance.interceptors.request.use((config) => {
   const accessToken = getAccessToken();
 
-  if (accessToken) {
+  if (accessToken && !isJwtExpired(accessToken)) {
     setAuthorizationHeader(config, accessToken);
   }
 
@@ -97,7 +99,7 @@ axiosInstance.interceptors.response.use(
       return axiosInstance(originalRequest);
     } catch (refreshError) {
       clearAuthStorage();
-      window.location.href = '/unauthorized';
+      window.location.href = '/login';
       throw refreshError;
     } finally {
       refreshPromise = null;

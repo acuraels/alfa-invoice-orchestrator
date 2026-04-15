@@ -1,8 +1,10 @@
-export type UserRole = 'admin' | 'factoring' | 'accounting' | 'taxation' | 'acquiring';
+export type UserRole = 'admin' | 'user';
 
 export type AuthUser = {
-  id: number;
+  id: string | number;
   username: string;
+  email?: string;
+  full_name?: string;
   role: UserRole;
 };
 
