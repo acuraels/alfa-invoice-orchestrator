@@ -758,10 +758,10 @@ components:
           type: string
           description: Имя или ФИО пользователя, создавшего версию.
           example: "Анна Иванова"
-          comment:
-            type: string
-            description: Текстовое описание того, что было изменено.
-            example: "Обновлены наименования товаров и количество"
+        comment:
+          type: string
+          description: Текстовое описание того, что было изменено.
+          example: "Обновлены наименования товаров и количество"
     InvoiceDetailResponse:
       type: object
       properties:
