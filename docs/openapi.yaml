@@ -368,7 +368,6 @@ paths:
           required: true
           schema:
             type: string
-            format: uuid
       responses:
         '200':
           description: Данные получены
@@ -598,7 +597,6 @@ components:
       properties:
         id:
           type: string
-          format: uuid
         fullName:
           type: string
           example: "Anna Ivanova"
@@ -645,7 +643,6 @@ components:
       properties:
         id:
           type: string
-          format: uuid
         fullName:
           type: string
           example: "Anna Ivanova"
