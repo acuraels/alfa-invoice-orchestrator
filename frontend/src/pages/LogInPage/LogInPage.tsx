@@ -75,7 +75,7 @@ export function LogInPage() {
       const userLabel = response.user.full_name || response.user.login;
       toast.success(`Вход выполнен: ${userLabel} (${roleLabels[response.user.role]}).`);
       setValues((current) => ({ ...current, password: '' }));
-      navigate('/invoice-list', { replace: true });
+      navigate(response.user.role === 'admin' ? '/admin-panel' : '/invoice-list', { replace: true });
     } catch (error) {
       if (isAxiosError(error) && error.response?.status === 401) {
         toast.error('Неверный логин или пароль.');

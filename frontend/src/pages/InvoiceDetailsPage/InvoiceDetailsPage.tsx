@@ -17,7 +17,7 @@ type InvoiceLine = {
 const invoiceLines: InvoiceLine[] = [
   {
     id: 'line-1',
-    productName: 'Лицензия на ПО (Годовая)',
+    productName: 'Лицензия на ПО (годовая)',
     unit: 'шт',
     quantity: '5',
     unitPrice: '1000',
@@ -47,7 +47,7 @@ export function InvoiceDetailsPage() {
         <div className="invoice-details-page__container">
           <section className="invoice-details-topbar">
             <div className="invoice-details-topbar__identity">
-              <h1>00/MOU3V/260407/00000765</h1>
+              <h1>Редактор</h1>
               <span className="invoice-details-topbar__status">Черновик</span>
             </div>
 
@@ -64,8 +64,11 @@ export function InvoiceDetailsPage() {
 
               <label className="invoice-details-select invoice-details-select--department">
                 <span className="invoice-details-select__label">Департамент:</span>
-                <select defaultValue="it">
-                  <option value="it">IT Division</option>
+                <select defaultValue="факторинг">
+                  <option value="бухгалтерия">бухгалтерия</option>
+                  <option value="налоговая">налоговая</option>
+                  <option value="управление">управление</option>
+                  <option value="факторинг">факторинг</option>
                 </select>
                 <ChevronDown size={16} />
               </label>
@@ -85,11 +88,11 @@ export function InvoiceDetailsPage() {
             <h2>Детали документа</h2>
 
             <div className="invoice-details-form">
-              <label className="invoice-details-field">
+              <label className="invoice-details-field invoice-details-field--wide">
                 <span>
-                  Порядковый номер <strong>*</strong>
+                  Номер счета-фактуры <strong>*</strong>
                 </span>
-                <input type="text" defaultValue="765" />
+                <input type="text" defaultValue="00/МОУЗV/260407/00000765" />
               </label>
 
               <label className="invoice-details-field">
@@ -176,11 +179,7 @@ export function InvoiceDetailsPage() {
                     <div className="invoice-lines-table__cell invoice-lines-table__cell--readonly">
                       {line.amountWithoutVat}
                     </div>
-
-                    <div className="invoice-lines-table__cell invoice-lines-table__cell--readonly">
-                      {line.vatAmount}
-                    </div>
-
+                    <div className="invoice-lines-table__cell invoice-lines-table__cell--readonly">{line.vatAmount}</div>
                     <div className="invoice-lines-table__cell invoice-lines-table__cell--readonly">
                       {line.totalAmount}
                     </div>
@@ -214,10 +213,16 @@ export function InvoiceDetailsPage() {
               </div>
 
               <div className="invoice-details-actions__buttons">
-                <button type="button" className="invoice-details-actions__button invoice-details-actions__button--secondary">
+                <button
+                  type="button"
+                  className="invoice-details-actions__button invoice-details-actions__button--secondary"
+                >
                   Сохранить черновик
                 </button>
-                <button type="button" className="invoice-details-actions__button invoice-details-actions__button--primary">
+                <button
+                  type="button"
+                  className="invoice-details-actions__button invoice-details-actions__button--primary"
+                >
                   Утвердить и отправить
                 </button>
               </div>

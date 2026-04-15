@@ -34,8 +34,8 @@ const PROCESSING_INVOICES: InvoiceListItem[] = [
     sequenceNumber: 304,
     counterparty: 'ООО "ТехноКорп"',
     status: 'validation_error',
-    department: 'МОУЗV',
-    departmentCode: 'MOU3V',
+    department: 'факторинг',
+    departmentCode: 'МОУЗV',
     issueDate: '2026-10-22',
     createdAt: '22 октября 19:42',
   },
@@ -44,8 +44,8 @@ const PROCESSING_INVOICES: InvoiceListItem[] = [
     sequenceNumber: 305,
     counterparty: 'ООО "БизнесПартнер"',
     status: 'created',
-    department: 'FIN01',
-    departmentCode: 'FIN01',
+    department: 'бухгалтерия',
+    departmentCode: 'БУХ01',
     issueDate: '2026-10-22',
     createdAt: '22 октября 18:30',
   },
@@ -54,8 +54,8 @@ const PROCESSING_INVOICES: InvoiceListItem[] = [
     sequenceNumber: 306,
     counterparty: 'ЗАО "СтройГрупп"',
     status: 'created',
-    department: 'OPS12',
-    departmentCode: 'OPS12',
+    department: 'управление',
+    departmentCode: 'УПР12',
     issueDate: '2026-10-22',
     createdAt: '22 октября 16:15',
   },
@@ -67,8 +67,8 @@ const PROCESSED_INVOICES: InvoiceListItem[] = [
     sequenceNumber: 301,
     counterparty: 'ООО "МегаСистемс"',
     status: 'sent',
-    department: 'МОУЗV',
-    departmentCode: 'MOU3V',
+    department: 'факторинг',
+    departmentCode: 'МОУЗV',
     issueDate: '2026-10-21',
     createdAt: '21 октября 14:20',
   },
@@ -77,8 +77,8 @@ const PROCESSED_INVOICES: InvoiceListItem[] = [
     sequenceNumber: 302,
     counterparty: 'ООО "ТрейдКомпани"',
     status: 'sent',
-    department: 'FIN01',
-    departmentCode: 'FIN01',
+    department: 'бухгалтерия',
+    departmentCode: 'БУХ01',
     issueDate: '2026-10-21',
     createdAt: '21 октября 11:05',
   },
@@ -87,8 +87,8 @@ const PROCESSED_INVOICES: InvoiceListItem[] = [
     sequenceNumber: 303,
     counterparty: 'ООО "ПромСнаб"',
     status: 'send_error',
-    department: 'OPS12',
-    departmentCode: 'OPS12',
+    department: 'налоговая',
+    departmentCode: 'НАЛ03',
     issueDate: '2026-10-21',
     createdAt: '21 октября 09:30',
   },
@@ -135,7 +135,11 @@ export function InvoiceListPage() {
                 type="button"
                 role="tab"
                 aria-selected={activeTab === 'to-process'}
-                className={activeTab === 'to-process' ? 'invoice-tabs__button invoice-tabs__button--active' : 'invoice-tabs__button'}
+                className={
+                  activeTab === 'to-process'
+                    ? 'invoice-tabs__button invoice-tabs__button--active'
+                    : 'invoice-tabs__button'
+                }
                 onClick={() => handleTabChange('to-process')}
               >
                 К обработке
@@ -144,7 +148,11 @@ export function InvoiceListPage() {
                 type="button"
                 role="tab"
                 aria-selected={activeTab === 'to-proceed'}
-                className={activeTab === 'to-proceed' ? 'invoice-tabs__button invoice-tabs__button--active' : 'invoice-tabs__button'}
+                className={
+                  activeTab === 'to-proceed'
+                    ? 'invoice-tabs__button invoice-tabs__button--active'
+                    : 'invoice-tabs__button'
+                }
                 onClick={() => handleTabChange('to-proceed')}
               >
                 Обработано
@@ -164,11 +172,7 @@ export function InvoiceListPage() {
                   )}
                 </div>
 
-                <button
-                  type="button"
-                  className="invoice-toolbar__primary-button"
-                  disabled={selectedIds.length === 0}
-                >
+                <button type="button" className="invoice-toolbar__primary-button" disabled={selectedIds.length === 0}>
                   <CheckCheck size={18} />
                   <span>Утвердить ({selectedIds.length})</span>
                 </button>
@@ -203,14 +207,16 @@ export function InvoiceListPage() {
                     <Link to={`/invoice-list/${invoice.id}`} className="invoice-card__link">
                       <div className="invoice-card__summary">
                         <div className="invoice-card__heading">
-                          <h2>
-                            {formatInvoiceNumber(invoice.departmentCode, invoice.issueDate, invoice.sequenceNumber)}
-                          </h2>
+                          <h2>{formatInvoiceNumber(invoice.departmentCode, invoice.issueDate, invoice.sequenceNumber)}</h2>
                           <span className={STATUS_CONFIG[invoice.status].className}>
                             {STATUS_CONFIG[invoice.status].label}
                           </span>
                         </div>
-                        <p>{invoice.counterparty}</p>
+                        <p>от {invoice.counterparty}</p>
+                        <div className="invoice-card__meta">
+                          <small className="invoice-card__department-label">Отдел:</small>
+                          <small className="invoice-card__department">{invoice.department}</small>
+                        </div>
                       </div>
 
                       <time className="invoice-card__date">{invoice.createdAt}</time>
@@ -262,6 +268,10 @@ export function InvoiceListPage() {
                 <div className="invoice-select">
                   <select id="department-filter" defaultValue="all">
                     <option value="all">Все</option>
+                    <option value="бухгалтерия">бухгалтерия</option>
+                    <option value="налоговая">налоговая</option>
+                    <option value="управление">управление</option>
+                    <option value="факторинг">факторинг</option>
                   </select>
                   <ChevronDown size={18} />
                 </div>
