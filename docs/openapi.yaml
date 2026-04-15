@@ -24,17 +24,17 @@ paths:
                 items:
                   $ref: '#/components/schemas/DepartmentListItem'
                   
-  /api/v1/invoices/{number}/versions:
+  /api/v1/invoices/{id}/versions:
     get:
       summary: Получение истории версий счета-фактуры
       description: Возвращает список всех сохраненных версий документа. Данные используются для выпадающего списка выбора версий и отображения информации об авторе и комментариях к изменениям. Сортировка должна быть по убыванию (от новых к старым).
       parameters:
         - in: path
-          name: number
+          name: id
           required: true
           schema:
             type: string
-          description: Уникальный номер счета-фактуры.
+            format: uuid
       responses:
         '200':
           description: История версий успешно получена.
@@ -166,9 +166,9 @@ paths:
             schema:
               type: object
               required:
-                - invoiceNumbers
+                - invoiceIds
               properties:
-                invoiceNumbers:
+                invoiceIds:
                   type: array
                   items:
                     type: string
@@ -240,17 +240,17 @@ paths:
                 type: string
                 format: binary
 
-  /api/v1/invoices/{number}:
+  /api/v1/invoices/{id}:
     get:
       summary: Получение данных счета-фактуры
       description: Возвращает полную структуру документа, включая вложенные позиции, данные контрагента для Read-Only полей и метаданные версионирования.
       parameters:
         - in: path
-          name: number
+          name: id
           required: true
           schema:
             type: string
-          description: Уникальный номер счета-фактуры (PK).
+            format: uuid
         - in: query
           name: version
           required: false
@@ -272,10 +272,11 @@ paths:
       description: Обновляет только переданные поля документа. Неизменяемые поля (статус, порядковый номер, департамент) игнорируются. Для защиты от перезаписи обязательна передача текущей версии (`version`). Метод недоступен, если документ имеет статусы группы processed (inboice_created, sending_error, sent)
       parameters:
         - in: path
-          name: number
+          name: id
           required: true
           schema:
             type: string
+            format: uuid
           description: Уникальный номер счета-фактуры.
       requestBody:
         required: true
@@ -294,18 +295,17 @@ paths:
           description: Конфликт версий. Документ был изменен другим пользователем.
 
   
-  /api/v1/invoices/{number}/approve:
+  /api/v1/invoices/{id}/approve:
     post:
       summary: Утвердить и отправить
       description: Выполняет жесткую серверную валидацию. При успехе меняет статус на `invoice_created` или `sent` (согласно стейт-машине) и блокирует дальнейшее редактирование.
       parameters:
         - in: path
-          name: number
+          name: id
           required: true
-          schaema:
+          schema:
             type: string
-      # Опционально: можно передавать тело UpdateInvoiceRequest, чтобы сэкономить один PUT запрос перед утверждением, 
-      # но классический REST подразумевает сначала сохранение (PUT), затем смену состояния (POST).
+            format: uuid
       responses:
         '200':
           description: Документ утвержден
@@ -423,6 +423,9 @@ components:
     InvoiceListItem:
       type: object
       properties:
+        id:
+          type: string
+          format: uuid
         number:
           type: string
           description: Уникальный номер счета-фактуры.
@@ -474,84 +477,7 @@ components:
           items:
             $ref: '#/components/schemas/InvoiceListItem'
 
-    tailResponse:
-      type: object
-      properties:
-        # 1. Метаданные (Шапка UI)
-        number:
-          type: string
-          example: "00/FCT/260407/00000765"
-        status:
-          type: string
-          example: "project_created"
-        departmentId:
-          type: string
-          format: uuid
-        version:
-          type: integer
-          description: Текущая версия документа (для контроля конкурентного доступа)
-          example: 3
-        versionUpdatedAt:
-          type: string
-          format: date-time
-          example: "2026-04-09T14:30:00Z"
-        versionAuthor:
-          type: string
-          example: "Анна Иванова"
-
-        # 2. Детали документа (Редактируемые и Read-only)
-        sequenceNumber:
-          type: string
-          description: Отображаемый порядковый номер в интерфейсе (765)
-          example: "765"
-        issueDate:
-          type: string
-          format: date
-          example: "2026-04-07"
-        counterpartyId:
-          type: string
-          format: uuid
-        counterpartyName:
-          type: string
-          description: Read-only для UI
-          example: 'ООО "ТехКорп Солюшнс"'
-        counterpartyInn:
-          type: string
-          description: Read-only для UI
-          example: "7701234567"
-        counterpartyAddress:
-          type: string
-          description: Read-only для UI
-          example: "г. Москва, Деловой проспект, д. 123, 101000"
-        paymentDocNumber:
-          type: string
-          nullable: true
-          example: "ПП-12345"
-        paymentDocDate:
-          type: string
-          format: date
-          nullable: true
-          example: "2026-04-07"
-        vatRate:
-          type: integer
-          description: Единая ставка НДС для всего документа
-          example: 20
-
-        # 3. Итоги (Рассчитаны бэкендом, Read-only для UI)
-        totalVatAmount:
-          type: number
-          format: float
-          example: 1200.00
-        totalWithVat:
-          type: number
-          format: float
-          example: 7200.00
-
-        # 4. Позиции
-        lines:
-          type: array
-          items:
-            $ref: '#/components/schemas/InvoiceLineResponseDTO'
+  
 
     InvoiceLineResponseDTO:
       type: object
@@ -588,54 +514,6 @@ components:
           format: float
           example: 6000.00
 
-    # ---------------------------------------------------------
-    # МОДЕЛИ ДЛЯ ЗАПРОСА (PUT Request)
-    # ---------------------------------------------------------
-    UpdateInvoiceRequest:
-      type: object
-      required:
-        - sequenceNumber
-        - issueDate
-        - counterpartyId
-        - vatRate
-        - departmentId
-        - version
-        - lines
-      properties:
-        version:
-          type: integer
-          description: Обязательное поле. Фронтенд должен передатьInvoiceDe текущую версию, которую он редактирует. Бэкенд сверяет ее с БД. Если в БД версия больше (кто-то уже сохранил документ), PUT отклоняется (409 Conflict).
-          example: 3
-        sequenceNumber:
-          type: string
-          example: "765"
-        departmentId:
-          type: string
-          format: uuid
-        issueDate:
-          type: string
-          format: date
-          example: "2026-04-07"
-        counterpartyId:
-          type: string
-          format: uuid
-          description: ИНН и Адрес бэкенд подтянет сам на основе этого ID
-        paymentDocNumber:
-          type: string
-          nullable: true
-          example: "ПП-12345"
-        paymentDocDate:
-          type: string
-          format: date
-          nullable: true
-          example: "2026-04-07"
-        vatRate:
-          type: integer
-          example: 20
-        lines:
-          type: array
-          items:
-            $ref: '#/components/schemas/InvoiceLineRequestDTO'
 
     PatchInvoiceRequest:
       type: object
@@ -888,6 +766,9 @@ components:
       type: object
       properties:
         # 1. Метаданные (Шапка UI)
+        id:
+          type: string
+          format: uuid
         number:
           type: string
           example: "00/FCT/260407/00000765"
