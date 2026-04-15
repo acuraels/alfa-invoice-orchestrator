@@ -1,11 +1,16 @@
 export type UserRole = 'admin' | 'user';
 
+export type AuthDepartment = {
+  id: string | number;
+  name: string;
+};
+
 export type AuthUser = {
   id: string | number;
-  username: string;
-  email?: string;
-  full_name?: string;
+  login: string;
+  full_name: string;
   role: UserRole;
+  departments: AuthDepartment[];
 };
 
 export type LoginRequest = {

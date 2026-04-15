@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { Eye, EyeOff, Lock, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { authService } from '../../services/authService';
+import type { UserRole } from '../../types/auth';
 import './LogInPage.css';
 
 type FormValues = {
@@ -16,6 +17,11 @@ type FormErrors = Partial<Record<keyof FormValues, string>>;
 const initialValues: FormValues = {
   username: '',
   password: '',
+};
+
+const roleLabels: Record<UserRole, string> = {
+  admin: 'администратор',
+  user: 'сотрудник',
 };
 
 export function LogInPage() {
@@ -66,8 +72,8 @@ export function LogInPage() {
         password: values.password,
       });
 
-      const userLabel = response.user.full_name ?? response.user.username;
-      toast.success(`Вход выполнен: ${userLabel} (${response.user.role}).`);
+      const userLabel = response.user.full_name || response.user.login;
+      toast.success(`Вход выполнен: ${userLabel} (${roleLabels[response.user.role]}).`);
       setValues((current) => ({ ...current, password: '' }));
       navigate('/invoice-list', { replace: true });
     } catch (error) {
