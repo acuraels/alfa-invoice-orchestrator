@@ -833,43 +833,43 @@ components:
             type: string
             format: uuid
             
-      DepartmentListItem:
-        type: object
-        required:
-          - id
-          - name
-        properties:
-          id:
-            type: string
-            format: uuid
-            description: Уникальный идентификатор департамента
-            example: "550e8400-e29b-41d4-a716-446655440000"
-          name:
-            type: string
-            description: Название департамента для отображения в UI
-            example: "IT Division"
+    DepartmentListItem:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Уникальный идентификатор департамента
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        name:
+          type: string
+          description: Название департамента для отображения в UI
+          example: "IT Division"
 
 
-      InvoiceVersionListItem:
-        type: object
-        required:
-          - version
-          - updatedAt
-          - author
-        properties:
-          version:
-            type: integer
-            description: Номер версии документа.
-            example: 3
-          updatedAt:
-            type: string
-            format: date-time
-            description: Дата и время создания данной версии.
-            example: "2026-04-09T14:30:00Z"
-          author:
-            type: string
-            description: Имя или ФИО пользователя, создавшего версию.
-            example: "Анна Иванова"
+    InvoiceVersionListItem:
+      type: object
+      required:
+        - version
+        - updatedAt
+        - author
+      properties:
+        version:
+          type: integer
+          description: Номер версии документа.
+          example: 3
+        updatedAt:
+          type: string
+          format: date-time
+          description: Дата и время создания данной версии.
+          example: "2026-04-09T14:30:00Z"
+        author:
+          type: string
+          description: Имя или ФИО пользователя, создавшего версию.
+          example: "Анна Иванова"
           comment:
             type: string
             description: Текстовое описание того, что было изменено.
