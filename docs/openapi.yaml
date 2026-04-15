@@ -79,6 +79,8 @@ paths:
         - in: query
           name: status
           description: Список статусов для фильтрации. Если передано несколько, применяется логика OR (ИЛИ). Если не передано, фильтрация идет по умолчанию согласно вкладке `tab`.
+          style: form
+          explode: true
           schema:
             type: array
             items:
@@ -89,19 +91,17 @@ paths:
                 - invoice_created
                 - sending_error
                 - sent
-            style: form
-            explode: true
             
         - in: query
           name: departmentId
           description: Список ID департаментов для фильтрации. Если передано несколько, применяется логика OR (ИЛИ).
+          style: form
+          explode: true
           schema:
             type: array
             items:
               type: string
               format: uuid
-            style: form
-            explode: true
         - in: query
           name: page
           schema:
