@@ -2,6 +2,11 @@ openapi: 3.0.3
 info:
   title: Invoice API
   version: 1.0.0
+servers:
+  - url: http://localhost:8001
+    description: Direct backend access
+  - url: http://localhost:8080
+    description: Nginx reverse proxy
 paths:
   /api/v1/departments:
     get:
