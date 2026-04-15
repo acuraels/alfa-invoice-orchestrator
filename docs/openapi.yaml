@@ -460,7 +460,7 @@ components:
           items:
             $ref: '#/components/schemas/InvoiceListItem'
 
-    InvoiceDetailResponse:
+    tailResponse:
       type: object
       properties:
         # 1. Метаданные (Шапка UI)
@@ -590,7 +590,7 @@ components:
       properties:
         version:
           type: integer
-          description: Обязательное поле. Фронтенд должен передать текущую версию, которую он редактирует. Бэкенд сверяет ее с БД. Если в БД версия больше (кто-то уже сохранил документ), PUT отклоняется (409 Conflict).
+          description: Обязательное поле. Фронтенд должен передатьInvoiceDe текущую версию, которую он редактирует. Бэкенд сверяет ее с БД. Если в БД версия больше (кто-то уже сохранил документ), PUT отклоняется (409 Conflict).
           example: 3
         sequenceNumber:
           type: string
@@ -874,3 +874,89 @@ components:
             type: string
             description: Текстовое описание того, что было изменено.
             example: "Обновлены наименования товаров и количество"
+    InvoiceDetailResponse:
+      type: object
+      properties:
+        # 1. Метаданные (Шапка UI)
+        number:
+          type: string
+          example: "00/FCT/260407/00000765"
+        status:
+          type: string
+          example: "project_created"
+        departmentId:
+          type: string
+          format: uuid
+        departmentName:
+          type: string
+          description: Название департамента для отображения в шапке (Read-only)
+          example: "IT Division"
+        version:
+          type: integer
+          description: Текущая версия документа (для контроля конкурентного доступа)
+          example: 3
+        versionUpdatedAt:
+          type: string
+          format: date-time
+          example: "2026-04-09T14:30:00Z"
+        versionAuthor:
+          type: string
+          example: "Анна Иванова"
+        versionComment:
+          type: string
+          description: Комментарий к текущей версии (Read-only)
+          example: "Обновлены наименования товаров и количество"
+
+        # 2. Детали документа (Редактируемые и Read-only)
+        sequenceNumber:
+          type: string
+          description: Отображаемый порядковый номер в интерфейсе (765)
+          example: "765"
+        issueDate:
+          type: string
+          format: date
+          example: "2026-04-07"
+        counterpartyId:
+          type: string
+          format: uuid
+        counterpartyName:
+          type: string
+          description: Read-only для UI
+          example: 'ООО "ТехКорп Солюшнс"'
+        counterpartyInn:
+          type: string
+          description: Read-only для UI
+          example: "7701234567"
+        counterpartyAddress:
+          type: string
+          description: Read-only для UI
+          example: "г. Москва, Деловой проспект, д. 123, 101000"
+        paymentDocNumber:
+          type: string
+          nullable: true
+          example: "ПП-12345"
+        paymentDocDate:
+          type: string
+          format: date
+          nullable: true
+          example: "2026-04-07"
+        vatRate:
+          type: integer
+          description: Единая ставка НДС для всего документа
+          example: 20
+
+        # 3. Итоги (Рассчитаны бэкендом, Read-only для UI)
+        totalVatAmount:
+          type: number
+          format: float
+          example: 1200.00
+        totalWithVat:
+          type: number
+          format: float
+          example: 7200.00
+
+        # 4. Позиции
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceLineResponseDTO'
