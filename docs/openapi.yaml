@@ -349,7 +349,7 @@ paths:
         '201':
           description: Пользователь успешно создан
         '400':
-          description: Ошибка валидации или email уже существует
+          description: Ошибка валидации или login уже существует
 
   /api/v1/admin/users/{id}:
     get:
@@ -719,10 +719,9 @@ components:
         fullName:
           type: string
           example: "Anna Ivanova"
-        email:
+        login:
           type: string
-          format: email
-          example: "anna.ivanova@company.com"
+          example: "anna.ivanova"
         role:
           type: string
           enum: [user, admin]
@@ -767,10 +766,9 @@ components:
         fullName:
           type: string
           example: "Anna Ivanova"
-        email:
+        login:
           type: string
-          format: email
-          example: "anna.ivanova@company.com"
+          example: "anna.ivanova"
         role:
           type: string
           enum: [user, admin]
@@ -786,7 +784,7 @@ components:
       type: object
       required:
         - fullName
-        - email
+        - login
         - password
         - role
         - departmentIds
@@ -794,10 +792,9 @@ components:
         fullName:
           type: string
           example: "Anna Ivanova"
-        email:
+        login:
           type: string
-          format: email
-          example: "anna.ivanova@company.com"
+          example: "anna.ivanova"
         password:
           type: string
           format: password
@@ -818,15 +815,14 @@ components:
       type: object
       required:
         - fullName
-        - email
+        - login
         - role
         - departmentIds
       properties:
         fullName:
           type: string
-        email:
+        login:
           type: string
-          format: email
         password:
           type: string
           format: password
