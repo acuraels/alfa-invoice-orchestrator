@@ -142,7 +142,7 @@ export function InvoiceListPage() {
                 }
                 onClick={() => handleTabChange('to-process')}
               >
-                К обработке
+                Проекты
               </button>
               <button
                 type="button"
@@ -155,7 +155,7 @@ export function InvoiceListPage() {
                 }
                 onClick={() => handleTabChange('to-proceed')}
               >
-                Обработано
+                Счета-фактуры
               </button>
             </div>
 
