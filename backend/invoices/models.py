@@ -174,6 +174,13 @@ class RawTransaction(models.Model):
         blank=True,
         related_name="raw_transactions",
     )
+    invoice = models.ForeignKey(
+        "FinalInvoice",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="transactions",
+    )
     transaction_date = models.DateField(null=True, blank=True)
 
     product_name = models.CharField(max_length=255, blank=True, default="")
@@ -189,18 +196,17 @@ class RawTransaction(models.Model):
     validation_error = models.TextField(blank=True, default="")
     received_at = models.DateTimeField(auto_now_add=True)
     processed_at = models.DateTimeField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         indexes = [
             models.Index(fields=["drf"]),
             models.Index(fields=["status"]),
             models.Index(fields=["transaction_date"]),
-            models.Index(fields=["created_at"]),
             models.Index(fields=["received_at"]),
             models.Index(fields=["payload_hash"]),
             models.Index(fields=["counterparty"]),
             models.Index(fields=["department"]),
+            models.Index(fields=["invoice"]),
         ]
 
 
@@ -481,12 +487,11 @@ class MaterializationJob(models.Model):
     error_message = models.TextField(blank=True, default="")
     started_at = models.DateTimeField(auto_now_add=True)
     finished_at = models.DateTimeField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         indexes = [
             models.Index(fields=["status"]),
-            models.Index(fields=["created_at"]),
+            models.Index(fields=["started_at"]),
         ]
 
 

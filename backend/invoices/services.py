@@ -503,6 +503,7 @@ def materialize_draft_invoice(draft: DraftInvoice) -> FinalInvoice | None:
         with transaction.atomic():
             if hasattr(draft, "final_invoice"):
                 final_invoice = draft.final_invoice
+                RawTransaction.objects.filter(aggregation_group=draft.group).update(invoice=final_invoice)
                 ExportRecord.objects.get_or_create(
                     final_invoice=final_invoice,
                     defaults={
@@ -551,6 +552,7 @@ def materialize_draft_invoice(draft: DraftInvoice) -> FinalInvoice | None:
                 for line in draft.lines.all().order_by("line_no")
             ]
             FinalInvoiceLine.objects.bulk_create(lines)
+            RawTransaction.objects.filter(aggregation_group=draft.group).update(invoice=final_invoice)
 
             ExportRecord.objects.create(
                 final_invoice=final_invoice,

@@ -145,6 +145,7 @@ class MaterializationTests(BaseDomainTestCase):
         self.assertEqual(FinalInvoice.objects.count(), 1)
         self.assertEqual(final.lines.count(), 1)
         self.assertEqual(ExportRecord.objects.count(), 1)
+        self.assertEqual(RawTransaction.objects.filter(drf="DRF-1", invoice=final).count(), 2)
 
 
 class IntegrationPipelineTests(APITestCase):
