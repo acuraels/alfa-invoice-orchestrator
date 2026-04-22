@@ -1,4 +1,5 @@
 from decimal import Decimal
+from uuid import uuid4
 
 from django.conf import settings
 from django.db import models
@@ -6,6 +7,7 @@ from django.db import models
 
 class Department(models.Model):
     id = models.PositiveIntegerField(primary_key=True)
+    public_id = models.UUIDField(default=uuid4, unique=True, editable=False)
     code = models.CharField(max_length=32, unique=True)
     name = models.CharField(max_length=128)
     mnemonic = models.CharField(max_length=8)
@@ -23,6 +25,7 @@ class Department(models.Model):
 
 class Counterparty(models.Model):
     id = models.PositiveIntegerField(primary_key=True)
+    public_id = models.UUIDField(default=uuid4, unique=True, editable=False)
     name = models.CharField(max_length=255)
     inn = models.CharField(max_length=16, blank=True, default="")
     kpp = models.CharField(max_length=16, blank=True, default="")
@@ -182,13 +185,17 @@ class RawTransaction(models.Model):
         related_name="transactions",
     )
     transaction_date = models.DateField(null=True, blank=True)
+    amount = models.DecimalField(max_digits=16, decimal_places=4, null=True, blank=True)
+    debit_account = models.CharField(max_length=64)
+    credit_account = models.CharField(max_length=64)
+    created_at = models.DateTimeField(null=True, blank=True)
 
-    product_name = models.CharField(max_length=255, blank=True, default="")
-    unit_measure = models.CharField(max_length=32, blank=True, default="")
-    quantity = models.DecimalField(max_digits=16, decimal_places=4, default=Decimal("0"))
-    unit_price = models.DecimalField(max_digits=16, decimal_places=4, default=Decimal("0"))
-    vat_rate = models.DecimalField(max_digits=6, decimal_places=4, default=Decimal("0"))
-    vat_amount = models.DecimalField(max_digits=16, decimal_places=4, default=Decimal("0"))
+    product_name = models.CharField(max_length=255, null=True, blank=True)
+    unit_measure = models.CharField(max_length=32, null=True, blank=True)
+    quantity = models.DecimalField(max_digits=16, decimal_places=4, null=True, blank=True)
+    unit_price = models.DecimalField(max_digits=16, decimal_places=4, null=True, blank=True)
+    vat_rate = models.DecimalField(max_digits=6, decimal_places=4, null=True, blank=True)
+    vat_amount = models.DecimalField(max_digits=16, decimal_places=4, null=True, blank=True)
 
     payload_hash = models.CharField(max_length=64)
     payload = models.JSONField()
@@ -202,6 +209,7 @@ class RawTransaction(models.Model):
             models.Index(fields=["drf"]),
             models.Index(fields=["status"]),
             models.Index(fields=["transaction_date"]),
+            models.Index(fields=["created_at"]),
             models.Index(fields=["received_at"]),
             models.Index(fields=["payload_hash"]),
             models.Index(fields=["counterparty"]),
@@ -326,11 +334,13 @@ class FinalInvoice(models.Model):
         blank=True,
         related_name="final_invoice",
     )
-    invoice_number = models.CharField(max_length=64, unique=True)
+    number = models.CharField(max_length=64, unique=True)
     drf = models.CharField(max_length=64)
     counterparty = models.ForeignKey(Counterparty, on_delete=models.PROTECT, related_name="final_invoices")
     department = models.ForeignKey(Department, on_delete=models.PROTECT, related_name="final_invoices")
-    transaction_date = models.DateField()
+    issue_date = models.DateField()
+    payment_doc_number = models.CharField(max_length=128, blank=True, default="")
+    payment_doc_date = models.DateField(null=True, blank=True)
     vat_rate = models.DecimalField(max_digits=6, decimal_places=4)
     total_vat_amount = models.DecimalField(max_digits=16, decimal_places=4)
     total_with_vat = models.DecimalField(max_digits=16, decimal_places=4)
@@ -345,7 +355,7 @@ class FinalInvoice(models.Model):
             models.Index(fields=["drf"]),
             models.Index(fields=["status"]),
             models.Index(fields=["export_status"]),
-            models.Index(fields=["transaction_date"]),
+            models.Index(fields=["issue_date"]),
             models.Index(fields=["created_at"]),
             models.Index(fields=["department"]),
             models.Index(fields=["counterparty"]),

@@ -88,16 +88,16 @@ class FinalInvoiceLineInline(admin.TabularInline):
 class FinalInvoiceAdmin(admin.ModelAdmin):
     list_display = (
         "id",
-        "invoice_number",
+        "number",
         "drf",
         "status",
         "export_status",
         "department",
-        "transaction_date",
+        "issue_date",
         "total_with_vat",
     )
-    list_filter = ("status", "export_status", "department", "transaction_date")
-    search_fields = ("invoice_number", "drf")
+    list_filter = ("status", "export_status", "department", "issue_date")
+    search_fields = ("number", "drf")
     inlines = [FinalInvoiceLineInline]
 
 

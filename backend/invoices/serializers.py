@@ -18,6 +18,8 @@ from invoices.schemas import IngestTransactionsSerializer
 class RawTransactionSerializer(serializers.ModelSerializer):
     counterparty_name = serializers.CharField(source="counterparty.name", read_only=True)
     department_code = serializers.CharField(source="department.code", read_only=True)
+    counterparty_id = serializers.UUIDField(source="counterparty.public_id", read_only=True)
+    department_id = serializers.UUIDField(source="department.public_id", read_only=True)
 
     class Meta:
         model = RawTransaction
@@ -28,15 +30,21 @@ class RawTransactionSerializer(serializers.ModelSerializer):
             "transaction_type",
             "counterparty",
             "counterparty_name",
+            "counterparty_id",
             "department",
             "department_code",
+            "department_id",
             "transaction_date",
+            "amount",
+            "debit_account",
+            "credit_account",
             "product_name",
             "unit_measure",
             "quantity",
             "unit_price",
             "vat_rate",
             "vat_amount",
+            "created_at",
             "status",
             "validation_error",
             "payload_hash",
@@ -120,8 +128,6 @@ class FinalInvoiceLineSerializer(serializers.ModelSerializer):
     class Meta:
         model = FinalInvoiceLine
         fields = [
-            "id",
-            "line_no",
             "product_name",
             "unit",
             "quantity",
@@ -134,29 +140,21 @@ class FinalInvoiceLineSerializer(serializers.ModelSerializer):
 
 class FinalInvoiceSerializer(serializers.ModelSerializer):
     lines = FinalInvoiceLineSerializer(many=True, read_only=True)
-    counterparty_name = serializers.CharField(source="counterparty.name", read_only=True)
-    department_code = serializers.CharField(source="department.code", read_only=True)
+    counterpartyId = serializers.UUIDField(source="counterparty.public_id", read_only=True)
+    createdAt = serializers.DateTimeField(source="created_at", read_only=True)
 
     class Meta:
         model = FinalInvoice
         fields = [
-            "id",
-            "draft_invoice",
-            "invoice_number",
-            "drf",
-            "counterparty",
-            "counterparty_name",
-            "department",
-            "department_code",
-            "transaction_date",
+            "number",
+            "issue_date",
+            "counterpartyId",
+            "payment_doc_number",
+            "payment_doc_date",
             "vat_rate",
             "total_vat_amount",
             "total_with_vat",
-            "status",
-            "export_status",
-            "materialized_at",
-            "created_at",
-            "updated_at",
+            "createdAt",
             "lines",
         ]
 
@@ -169,7 +167,7 @@ class ExportAttemptSerializer(serializers.ModelSerializer):
 
 class ExportRecordSerializer(serializers.ModelSerializer):
     attempts = ExportAttemptSerializer(many=True, read_only=True)
-    invoice_number = serializers.CharField(source="final_invoice.invoice_number", read_only=True)
+    invoice_number = serializers.CharField(source="final_invoice.number", read_only=True)
 
     class Meta:
         model = ExportRecord

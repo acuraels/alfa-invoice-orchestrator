@@ -1,5 +1,6 @@
 from datetime import date
 from decimal import Decimal
+from uuid import UUID
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -25,60 +26,82 @@ from invoices.services import (
     process_transaction_payload,
 )
 
+DEPARTMENT_FACTORING_UUID = UUID("11111111-1111-1111-1111-111111111111")
+DEPARTMENT_ACCOUNTING_UUID = UUID("22222222-2222-2222-2222-222222222222")
+COUNTERPARTY_MAIN_UUID = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+
 
 def make_income_payload(
     *,
     drf: str = "DRF-1",
-    tx_id: str = "income-1",
-    counterparty_id: int = 10001,
-    department_id: int = 101,
+    counterparty_id: str = str(COUNTERPARTY_MAIN_UUID),
+    department_id: str = str(DEPARTMENT_FACTORING_UUID),
     date: str = "2026-04-13",
+    amount: str = "200",
     quantity: str = "2",
     unit_price: str = "100",
-    vat_rate: str = "0.2",
 ):
     return {
-        "transactionId": tx_id,
         "drf": drf,
         "type": "INCOME",
         "counterpartyId": counterparty_id,
         "departmentId": department_id,
         "date": date,
+        "amount": amount,
+        "debitAccount": "62.01",
+        "creditAccount": "90.01",
         "productName": "Service",
         "unitMeasure": "pcs",
         "quantity": quantity,
         "unitPrice": unit_price,
-        "vatRate": vat_rate,
+        "createdAt": "2026-04-13T10:00:00Z",
     }
 
 
 def make_vat_payload(
     *,
     drf: str = "DRF-1",
-    tx_id: str = "vat-1",
-    counterparty_id: int = 10001,
-    department_id: int = 101,
+    counterparty_id: str = str(COUNTERPARTY_MAIN_UUID),
+    department_id: str = str(DEPARTMENT_FACTORING_UUID),
     date: str = "2026-04-13",
     vat_rate: str = "0.2",
     vat_amount: str = "40",
 ):
     return {
-        "transactionId": tx_id,
         "drf": drf,
         "type": "VAT",
         "counterpartyId": counterparty_id,
         "departmentId": department_id,
         "date": date,
+        "debitAccount": "68.02",
+        "creditAccount": "19.03",
         "vatRate": vat_rate,
         "vatAmount": vat_amount,
+        "createdAt": "2026-04-13T10:01:00Z",
     }
 
 
 class BaseDomainTestCase(TestCase):
     def setUp(self):
-        Department.objects.create(id=101, code="factoring", name="Факторинг", mnemonic="fct")
-        Department.objects.create(id=102, code="accounting", name="Бухучет", mnemonic="acc")
-        Counterparty.objects.create(id=10001, name="АО Альфа Поставщик")
+        Department.objects.create(
+            id=101,
+            public_id=DEPARTMENT_FACTORING_UUID,
+            code="factoring",
+            name="Факторинг",
+            mnemonic="fct",
+        )
+        Department.objects.create(
+            id=102,
+            public_id=DEPARTMENT_ACCOUNTING_UUID,
+            code="accounting",
+            name="Бухучет",
+            mnemonic="acc",
+        )
+        Counterparty.objects.create(
+            id=10001,
+            public_id=COUNTERPARTY_MAIN_UUID,
+            name="АО Альфа Поставщик",
+        )
 
 
 class PayloadValidationTests(BaseDomainTestCase):
@@ -87,10 +110,12 @@ class PayloadValidationTests(BaseDomainTestCase):
             data={
                 "drf": "DRF-10",
                 "type": "INCOME",
-                "counterpartyId": 10001,
-                "departmentId": 101,
+                "counterpartyId": str(COUNTERPARTY_MAIN_UUID),
+                "departmentId": str(DEPARTMENT_FACTORING_UUID),
                 "date": "2026-04-13",
-                "vatRate": "0.2",
+                "debitAccount": "62.01",
+                "creditAccount": "90.01",
+                "createdAt": "2026-04-13T10:00:00Z",
             }
         )
         self.assertFalse(serializer.is_valid())
@@ -151,9 +176,25 @@ class MaterializationTests(BaseDomainTestCase):
 
 class IntegrationPipelineTests(APITestCase):
     def setUp(self):
-        Department.objects.create(id=101, code="factoring", name="Факторинг", mnemonic="fct")
-        Department.objects.create(id=102, code="accounting", name="Бухучет", mnemonic="acc")
-        Counterparty.objects.create(id=10001, name="АО Альфа Поставщик")
+        Department.objects.create(
+            id=101,
+            public_id=DEPARTMENT_FACTORING_UUID,
+            code="factoring",
+            name="Факторинг",
+            mnemonic="fct",
+        )
+        Department.objects.create(
+            id=102,
+            public_id=DEPARTMENT_ACCOUNTING_UUID,
+            code="accounting",
+            name="Бухучет",
+            mnemonic="acc",
+        )
+        Counterparty.objects.create(
+            id=10001,
+            public_id=COUNTERPARTY_MAIN_UUID,
+            name="АО Альфа Поставщик",
+        )
 
         User = get_user_model()
         self.user = User.objects.create_user(
@@ -184,8 +225,14 @@ class IntegrationPipelineTests(APITestCase):
         response = self.client.post(
             "/api/v1/ingest/transactions",
             [
-                make_income_payload(drf="DRF-BAD", tx_id="income-bad", department_id=101),
-                make_vat_payload(drf="DRF-BAD", tx_id="vat-bad", department_id=102),
+                make_income_payload(
+                    drf="DRF-BAD",
+                    department_id=str(DEPARTMENT_FACTORING_UUID),
+                ),
+                make_vat_payload(
+                    drf="DRF-BAD",
+                    department_id=str(DEPARTMENT_ACCOUNTING_UUID),
+                ),
             ],
             format="json",
         )
@@ -195,7 +242,7 @@ class IntegrationPipelineTests(APITestCase):
         self.assertEqual(group.status, AggregationGroup.Status.VALIDATION_ERROR)
 
     def test_integration_duplicate_message(self):
-        payload = make_income_payload(drf="DRF-DUP", tx_id="dup-1")
+        payload = make_income_payload(drf="DRF-DUP")
         first = self.client.post("/api/v1/ingest/transactions", [payload], format="json")
         second = self.client.post("/api/v1/ingest/transactions", [payload], format="json")
 
@@ -207,7 +254,7 @@ class IntegrationPipelineTests(APITestCase):
     def test_integration_retry_path(self):
         self.client.post(
             "/api/v1/ingest/transactions",
-            [make_income_payload(drf="DRF-RETRY", tx_id="income-retry"), make_vat_payload(drf="DRF-RETRY", tx_id="vat-retry")],
+            [make_income_payload(drf="DRF-RETRY"), make_vat_payload(drf="DRF-RETRY")],
             format="json",
         )
         materialize_ready_drafts(limit=10)

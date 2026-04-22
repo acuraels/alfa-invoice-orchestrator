@@ -114,8 +114,8 @@ def _update_gauges() -> None:
 
 
 def _get_refs(payload: dict) -> tuple[Counterparty, Department]:
-    counterparty = Counterparty.objects.get(pk=payload["counterpartyId"])
-    department = Department.objects.get(pk=payload["departmentId"])
+    counterparty = Counterparty.objects.get(public_id=payload["counterpartyId"])
+    department = Department.objects.get(public_id=payload["departmentId"])
     return counterparty, department
 
 
@@ -234,6 +234,10 @@ def build_draft_invoice(group: AggregationGroup) -> DraftInvoice:
         return _set_draft_error(group, "Group must contain exactly 1 VAT transaction")
 
     vat_tx = vat_txs[0]
+    if vat_tx.vat_rate is None:
+        return _set_draft_error(group, "VAT transaction must contain vatRate")
+    if vat_tx.vat_amount is None:
+        return _set_draft_error(group, "VAT transaction must contain vatAmount")
 
     draft, created = DraftInvoice.objects.get_or_create(
         group=group,
@@ -255,12 +259,25 @@ def build_draft_invoice(group: AggregationGroup) -> DraftInvoice:
 
     DraftInvoiceLine.objects.filter(draft_invoice=draft).delete()
 
-    total_with_vat = Decimal("0")
-    vat_from_lines = Decimal("0")
+    total_income_amount = Decimal("0")
+    line_total_sum = Decimal("0")
+    vat_rate = vat_tx.vat_rate
 
     for line_no, income_tx in enumerate(incomes, start=1):
+        if income_tx.amount is None:
+            return _set_draft_error(group, "INCOME transaction must contain amount")
+        if income_tx.quantity is None:
+            return _set_draft_error(group, "INCOME transaction must contain quantity")
+        if income_tx.unit_price is None:
+            return _set_draft_error(group, "INCOME transaction must contain unitPrice")
+        if not income_tx.product_name:
+            return _set_draft_error(group, "INCOME transaction must contain productName")
+        if not income_tx.unit_measure:
+            return _set_draft_error(group, "INCOME transaction must contain unitMeasure")
+
+        total_income_amount += income_tx.amount
         amount_without_vat = q(income_tx.quantity * income_tx.unit_price)
-        line_vat_amount = q(amount_without_vat * income_tx.vat_rate)
+        line_vat_amount = q(amount_without_vat * vat_rate)
         line_total = q(amount_without_vat + line_vat_amount)
 
         DraftInvoiceLine.objects.create(
@@ -276,20 +293,30 @@ def build_draft_invoice(group: AggregationGroup) -> DraftInvoice:
             total_amount=line_total,
         )
 
-        total_with_vat += line_total
-        vat_from_lines += line_vat_amount
+        line_total_sum += line_total
 
-    vat_from_lines = q(vat_from_lines)
-    total_with_vat = q(total_with_vat)
+    total_income_amount = q(total_income_amount)
+    total_vat_amount = q(sum((tx.vat_amount or Decimal("0")) for tx in vat_txs))
+    expected_vat_amount = q(total_income_amount * vat_rate)
 
-    vat_diff = abs(vat_tx.vat_amount - vat_from_lines)
+    vat_diff = abs(total_vat_amount - expected_vat_amount)
     if vat_diff > VAT_TOLERANCE:
         return _set_draft_error(
             group,
-            f"VAT mismatch: VAT tx {vat_tx.vat_amount} != line vat sum {vat_from_lines}",
+            f"VAT mismatch: sum(vatAmount) {total_vat_amount} != sum(amount)*vatRate {expected_vat_amount}",
         )
 
-    draft.total_vat_amount = vat_tx.vat_amount
+    line_total_sum = q(line_total_sum)
+    total_with_vat = q(total_income_amount + total_vat_amount)
+    line_total_diff = abs(total_with_vat - line_total_sum)
+    if line_total_diff > VAT_TOLERANCE:
+        return _set_draft_error(
+            group,
+            "total_with_vat must be equal to line totals",
+        )
+
+    draft.vat_rate = vat_rate
+    draft.total_vat_amount = total_vat_amount
     draft.total_with_vat = total_with_vat
     draft.status = DraftInvoice.Status.PROJECT_CREATED
     draft.save()
@@ -407,18 +434,22 @@ def process_transaction_payload(
         raw_tx = RawTransaction.objects.create(
             inbound_log=inbound,
             aggregation_group=group,
-            external_id=data.get("transactionId", ""),
+            external_id=payload.get("transactionId", ""),
             drf=data["drf"],
             transaction_type=data["type"],
             counterparty=counterparty,
             department=department,
             transaction_date=data["date"],
-            product_name=data.get("productName", ""),
-            unit_measure=data.get("unitMeasure", ""),
-            quantity=data.get("quantity", Decimal("0")),
-            unit_price=data.get("unitPrice", Decimal("0")),
-            vat_rate=data["vatRate"],
-            vat_amount=data.get("vatAmount", Decimal("0")),
+            amount=data.get("amount"),
+            debit_account=data["debitAccount"],
+            credit_account=data["creditAccount"],
+            created_at=data["createdAt"],
+            product_name=data.get("productName"),
+            unit_measure=data.get("unitMeasure"),
+            quantity=data.get("quantity"),
+            unit_price=data.get("unitPrice"),
+            vat_rate=data.get("vatRate"),
+            vat_amount=data.get("vatAmount"),
             payload_hash=payload_hash,
             payload=payload,
             status=RawTransaction.Status.PROCESSED,
@@ -525,11 +556,13 @@ def materialize_draft_invoice(draft: DraftInvoice) -> FinalInvoice | None:
 
             final_invoice = FinalInvoice.objects.create(
                 draft_invoice=draft,
-                invoice_number=invoice_number,
+                number=invoice_number,
                 drf=draft.group.drf,
                 counterparty=draft.counterparty,
                 department=draft.department,
-                transaction_date=draft.transaction_date,
+                issue_date=draft.transaction_date,
+                payment_doc_number="",
+                payment_doc_date=None,
                 vat_rate=draft.vat_rate,
                 total_vat_amount=draft.total_vat_amount,
                 total_with_vat=draft.total_with_vat,
@@ -569,7 +602,7 @@ def materialize_draft_invoice(draft: DraftInvoice) -> FinalInvoice | None:
 
             InvoiceFieldChangeHistory.objects.create(
                 final_invoice=final_invoice,
-                field_name="invoice_number",
+                field_name="number",
                 old_value="",
                 new_value=invoice_number,
             )
@@ -663,7 +696,7 @@ def retry_final_invoice(final_invoice: FinalInvoice) -> ExportRecord:
     started = perf_counter()
     export_record, _ = ExportRecord.objects.get_or_create(
         final_invoice=final_invoice,
-        defaults={"status": ExportRecord.Status.RETRY_PENDING, "destination": "csv"},
+        defaults={"status": ExportRecord.Status.READY, "destination": "csv"},
     )
 
     old_status = final_invoice.status
