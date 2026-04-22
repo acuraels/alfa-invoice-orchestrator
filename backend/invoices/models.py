@@ -242,11 +242,8 @@ class IdempotencyRecord(models.Model):
 
 class DraftInvoice(models.Model):
     class Status(models.TextChoices):
-        DRAFT = "DRAFT", "Draft"
-        READY = "READY", "Ready"
-        VALIDATION_ERROR = "VALIDATION_ERROR", "Validation error"
-        MATERIALIZED = "MATERIALIZED", "Materialized"
-        MATERIALIZATION_ERROR = "MATERIALIZATION_ERROR", "Materialization error"
+        PROJECT_CREATED = "project_created", "Project created"
+        VALIDATING_ERROR = "validating_error", "Validating error"
 
     group = models.OneToOneField(AggregationGroup, on_delete=models.CASCADE, related_name="draft_invoice")
     counterparty = models.ForeignKey(Counterparty, on_delete=models.PROTECT, related_name="draft_invoices")
@@ -255,7 +252,7 @@ class DraftInvoice(models.Model):
     vat_rate = models.DecimalField(max_digits=6, decimal_places=4, default=Decimal("0"))
     total_vat_amount = models.DecimalField(max_digits=16, decimal_places=4, default=Decimal("0"))
     total_with_vat = models.DecimalField(max_digits=16, decimal_places=4, default=Decimal("0"))
-    status = models.CharField(max_length=32, choices=Status.choices, default=Status.DRAFT)
+    status = models.CharField(max_length=32, choices=Status.choices, default=Status.PROJECT_CREATED)
     validation_error = models.TextField(blank=True, default="")
     retry_count = models.PositiveIntegerField(default=0)
     materialized_at = models.DateTimeField(null=True, blank=True)
@@ -318,10 +315,9 @@ class InvoiceNumberSequence(models.Model):
 
 class FinalInvoice(models.Model):
     class Status(models.TextChoices):
-        MATERIALIZED = "MATERIALIZED", "Materialized"
-        EXPORT_READY = "EXPORT_READY", "Export ready"
-        EXPORT_ERROR = "EXPORT_ERROR", "Export error"
-        RETRY_PENDING = "RETRY_PENDING", "Retry pending"
+        INVOICE_CREATED = "invoice_created", "Invoice created"
+        SENDING_ERROR = "sending_error", "Sending error"
+        SENT = "sent", "Sent"
 
     draft_invoice = models.OneToOneField(
         DraftInvoice,
@@ -338,8 +334,8 @@ class FinalInvoice(models.Model):
     vat_rate = models.DecimalField(max_digits=6, decimal_places=4)
     total_vat_amount = models.DecimalField(max_digits=16, decimal_places=4)
     total_with_vat = models.DecimalField(max_digits=16, decimal_places=4)
-    status = models.CharField(max_length=32, choices=Status.choices, default=Status.MATERIALIZED)
-    export_status = models.CharField(max_length=32, choices=Status.choices, default=Status.EXPORT_READY)
+    status = models.CharField(max_length=32, choices=Status.choices, default=Status.INVOICE_CREATED)
+    export_status = models.CharField(max_length=32, choices=Status.choices, default=Status.INVOICE_CREATED)
     materialized_at = models.DateTimeField(auto_now_add=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

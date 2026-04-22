@@ -200,7 +200,7 @@ def _set_draft_error(group: AggregationGroup, message: str) -> DraftInvoice:
             "transaction_date": group.transaction_date,
         },
     )
-    draft.status = DraftInvoice.Status.VALIDATION_ERROR
+    draft.status = DraftInvoice.Status.VALIDATING_ERROR
     draft.validation_error = message
     draft.save(update_fields=["status", "validation_error", "updated_at"])
     group.status = AggregationGroup.Status.VALIDATION_ERROR
@@ -291,7 +291,7 @@ def build_draft_invoice(group: AggregationGroup) -> DraftInvoice:
 
     draft.total_vat_amount = vat_tx.vat_amount
     draft.total_with_vat = total_with_vat
-    draft.status = DraftInvoice.Status.READY
+    draft.status = DraftInvoice.Status.PROJECT_CREATED
     draft.save()
 
     group.status = AggregationGroup.Status.DRAFT
@@ -480,7 +480,7 @@ def generate_invoice_number(*, department: Department, date, version: str = "00"
 
 def _mark_draft_and_group_materialized(draft: DraftInvoice, materialized_at=None) -> None:
     ts = materialized_at or timezone.now()
-    draft.status = DraftInvoice.Status.MATERIALIZED
+    draft.status = DraftInvoice.Status.PROJECT_CREATED
     draft.validation_error = ""
     draft.materialized_at = draft.materialized_at or ts
     draft.save(update_fields=["status", "validation_error", "materialized_at", "updated_at"])
@@ -533,8 +533,8 @@ def materialize_draft_invoice(draft: DraftInvoice) -> FinalInvoice | None:
                 vat_rate=draft.vat_rate,
                 total_vat_amount=draft.total_vat_amount,
                 total_with_vat=draft.total_with_vat,
-                status=FinalInvoice.Status.MATERIALIZED,
-                export_status=FinalInvoice.Status.EXPORT_READY,
+                status=FinalInvoice.Status.INVOICE_CREATED,
+                export_status=FinalInvoice.Status.INVOICE_CREATED,
             )
 
             lines = [
@@ -563,14 +563,8 @@ def materialize_draft_invoice(draft: DraftInvoice) -> FinalInvoice | None:
             InvoiceStatusHistory.objects.create(
                 final_invoice=final_invoice,
                 from_status="",
-                to_status=FinalInvoice.Status.MATERIALIZED,
+                to_status=FinalInvoice.Status.INVOICE_CREATED,
                 reason="Materialized from Layer1 draft",
-            )
-            InvoiceStatusHistory.objects.create(
-                final_invoice=final_invoice,
-                from_status=FinalInvoice.Status.MATERIALIZED,
-                to_status=FinalInvoice.Status.EXPORT_READY,
-                reason="Export record created",
             )
 
             InvoiceFieldChangeHistory.objects.create(
@@ -592,9 +586,9 @@ def materialize_draft_invoice(draft: DraftInvoice) -> FinalInvoice | None:
             return final_invoice
     except Exception as exc:  # noqa: BLE001
         layer2_materialization_error_total.inc()
-        draft.status = DraftInvoice.Status.MATERIALIZATION_ERROR
+        draft.status = DraftInvoice.Status.VALIDATING_ERROR
         draft.retry_count += 1
-        draft.validation_error = str(exc)
+        draft.validation_error = f"materialization_error: {exc}"
         draft.save(update_fields=["status", "retry_count", "validation_error", "updated_at"])
 
         job.status = MaterializationJob.Status.ERROR
@@ -616,12 +610,15 @@ def materialize_draft_invoice(draft: DraftInvoice) -> FinalInvoice | None:
 
 
 def materialize_ready_drafts(limit: int = 100) -> dict[str, int]:
-    backlog = DraftInvoice.objects.filter(status=DraftInvoice.Status.READY).count()
+    backlog = DraftInvoice.objects.filter(
+        status=DraftInvoice.Status.PROJECT_CREATED,
+        materialized_at__isnull=True,
+    ).count()
     transfer_backlog_gauge.set(backlog)
 
     drafts = list(
         DraftInvoice.objects.select_related("group", "department", "counterparty")
-        .filter(status=DraftInvoice.Status.READY)
+        .filter(status=DraftInvoice.Status.PROJECT_CREATED, materialized_at__isnull=True)
         .order_by("created_at")[:limit]
     )
 
@@ -634,17 +631,29 @@ def materialize_ready_drafts(limit: int = 100) -> dict[str, int]:
         else:
             success += 1
 
-    transfer_backlog_gauge.set(DraftInvoice.objects.filter(status=DraftInvoice.Status.READY).count())
+    transfer_backlog_gauge.set(
+        DraftInvoice.objects.filter(
+            status=DraftInvoice.Status.PROJECT_CREATED,
+            materialized_at__isnull=True,
+        ).count()
+    )
     _update_gauges()
     return {"picked": len(drafts), "success": success, "errors": errors}
 
 
 def retry_failed_drafts(limit: int = 50) -> int:
-    drafts = DraftInvoice.objects.filter(status=DraftInvoice.Status.MATERIALIZATION_ERROR).order_by("updated_at")[:limit]
+    drafts = (
+        DraftInvoice.objects.filter(
+            status=DraftInvoice.Status.VALIDATING_ERROR,
+            validation_error__startswith="materialization_error:",
+            materialized_at__isnull=True,
+        )
+        .order_by("updated_at")[:limit]
+    )
     retried = 0
     for draft in drafts:
         retry_attempts_total.inc()
-        draft.status = DraftInvoice.Status.READY
+        draft.status = DraftInvoice.Status.PROJECT_CREATED
         draft.save(update_fields=["status", "updated_at"])
         retried += 1
     return retried
@@ -657,14 +666,15 @@ def retry_final_invoice(final_invoice: FinalInvoice) -> ExportRecord:
         defaults={"status": ExportRecord.Status.RETRY_PENDING, "destination": "csv"},
     )
 
-    old_status = final_invoice.export_status
-    final_invoice.export_status = FinalInvoice.Status.RETRY_PENDING
-    final_invoice.status = FinalInvoice.Status.RETRY_PENDING
+    old_status = final_invoice.status
+    final_invoice.export_status = FinalInvoice.Status.SENT
+    final_invoice.status = FinalInvoice.Status.SENT
     final_invoice.save(update_fields=["export_status", "status", "updated_at"])
 
-    export_record.status = ExportRecord.Status.RETRY_PENDING
+    export_record.status = ExportRecord.Status.SENT
     export_record.last_error = ""
-    export_record.save(update_fields=["status", "last_error", "updated_at"])
+    export_record.exported_at = timezone.now()
+    export_record.save(update_fields=["status", "last_error", "exported_at", "updated_at"])
 
     next_attempt = export_record.attempts.count() + 1
     ExportAttempt.objects.create(
@@ -680,7 +690,7 @@ def retry_final_invoice(final_invoice: FinalInvoice) -> ExportRecord:
     InvoiceStatusHistory.objects.create(
         final_invoice=final_invoice,
         from_status=old_status,
-        to_status=FinalInvoice.Status.RETRY_PENDING,
+        to_status=FinalInvoice.Status.SENT,
         reason="Manual retry requested",
     )
     return export_record
@@ -713,7 +723,10 @@ def summary_snapshot() -> dict:
         "groups_ready": AggregationGroup.objects.filter(status=AggregationGroup.Status.READY).count()
         + AggregationGroup.objects.filter(status=AggregationGroup.Status.DRAFT).count(),
         "draft_invoices_created": DraftInvoice.objects.count(),
-        "draft_invoices_ready": DraftInvoice.objects.filter(status=DraftInvoice.Status.READY).count(),
+        "draft_invoices_ready": DraftInvoice.objects.filter(
+            status=DraftInvoice.Status.PROJECT_CREATED,
+            materialized_at__isnull=True,
+        ).count(),
         "final_invoices_materialized": FinalInvoice.objects.count(),
         "export_errors": ExportRecord.objects.filter(status=ExportRecord.Status.ERROR).count(),
         "queue_lag": InboundMessageLog.objects.filter(

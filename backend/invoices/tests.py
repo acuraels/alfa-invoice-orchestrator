@@ -109,7 +109,7 @@ class AggregationTests(BaseDomainTestCase):
 
         draft = DraftInvoice.objects.get(group=group)
         self.assertEqual(draft.lines.count(), 1)
-        self.assertEqual(draft.status, DraftInvoice.Status.READY)
+        self.assertEqual(draft.status, DraftInvoice.Status.PROJECT_CREATED)
 
 
 class InvoiceNumberGenerationTests(BaseDomainTestCase):
@@ -146,6 +146,7 @@ class MaterializationTests(BaseDomainTestCase):
         self.assertEqual(final.lines.count(), 1)
         self.assertEqual(ExportRecord.objects.count(), 1)
         self.assertEqual(RawTransaction.objects.filter(drf="DRF-1", invoice=final).count(), 2)
+        self.assertEqual(final.status, FinalInvoice.Status.INVOICE_CREATED)
 
 
 class IntegrationPipelineTests(APITestCase):
@@ -216,5 +217,5 @@ class IntegrationPipelineTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         final.refresh_from_db()
-        self.assertEqual(final.status, FinalInvoice.Status.RETRY_PENDING)
-        self.assertEqual(final.export_record.status, ExportRecord.Status.RETRY_PENDING)
+        self.assertEqual(final.status, FinalInvoice.Status.SENT)
+        self.assertEqual(final.export_record.status, ExportRecord.Status.SENT)

@@ -12,7 +12,7 @@ class AuthAPITests(APITestCase):
             username="ivanov_aa",
             email="ivanov@example.com",
             password="SuperSecretPassword123",
-            role=User.Roles.ACCOUNTING,
+            role=User.Roles.USER,
         )
         self.login_url = reverse("auth-login")
         self.refresh_url = reverse("auth-refresh")
@@ -30,8 +30,8 @@ class AuthAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("refresh", response.data)
         self.assertIn("access", response.data)
-        self.assertEqual(response.data["user"]["username"], self.user.username)
-        self.assertEqual(response.data["user"]["role"], User.Roles.ACCOUNTING)
+        self.assertEqual(response.data["user"]["login"], self.user.username)
+        self.assertEqual(response.data["user"]["role"], User.Roles.USER)
 
     def test_login_with_invalid_password(self):
         response = self.client.post(
@@ -78,4 +78,4 @@ class AuthAPITests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["user"]["role"], User.Roles.ACCOUNTING)
+        self.assertEqual(response.data["user"]["role"], User.Roles.USER)
