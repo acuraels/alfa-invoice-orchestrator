@@ -9,3 +9,7 @@ frontend/node_modules/
 node_modules/
 staticfiles/
 backend/staticfiles/
+artifacts/load-tests/*.json
+artifacts/load-tests/*.md
+artifacts/load-tests/*.csv
+artifacts/load-tests/*.jsonl
