@@ -17,24 +17,32 @@ class Command(BaseCommand):
         User = get_user_model()
 
         for dep in DEPARTMENTS:
-            Department.objects.update_or_create(
-                id=dep["id"],
+            department, created = Department.objects.get_or_create(
+                code=dep["code"],
                 defaults={
-                    "code": dep["code"],
+                    "id": dep["id"],
                     "name": dep["name"],
                     "mnemonic": dep["mnemonic"],
                 },
             )
+            if not created:
+                department.name = dep["name"]
+                department.mnemonic = dep["mnemonic"]
+                department.save(update_fields=["name", "mnemonic"])
 
         for cp in COUNTERPARTIES:
-            Counterparty.objects.update_or_create(
-                id=cp["id"],
+            counterparty, created = Counterparty.objects.get_or_create(
+                inn=cp["inn"],
                 defaults={
+                    "id": cp["id"],
                     "name": cp["name"],
                     "address": cp["address"],
-                    "inn": cp["inn"],
                 },
             )
+            if not created:
+                counterparty.name = cp["name"]
+                counterparty.address = cp["address"]
+                counterparty.save(update_fields=["name", "address"])
 
         admin_username = os.getenv("DJANGO_SUPERUSER_USERNAME", "admin")
         admin_email = os.getenv("DJANGO_SUPERUSER_EMAIL", "admin@example.com")

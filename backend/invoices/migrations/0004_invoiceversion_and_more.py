@@ -7,6 +7,78 @@ from django.conf import settings
 from django.db import migrations, models
 
 
+def _create_numeric_uuid_casts(apps, schema_editor):
+    del apps
+    if schema_editor.connection.vendor != "postgresql":
+        return
+
+    with schema_editor.connection.cursor() as cursor:
+        cursor.execute(
+            """
+            CREATE OR REPLACE FUNCTION int4_to_uuid(integer)
+            RETURNS uuid
+            LANGUAGE SQL
+            IMMUTABLE
+            STRICT
+            AS 'SELECT md5($1::text)::uuid';
+            """
+        )
+        cursor.execute(
+            """
+            CREATE OR REPLACE FUNCTION int8_to_uuid(bigint)
+            RETURNS uuid
+            LANGUAGE SQL
+            IMMUTABLE
+            STRICT
+            AS 'SELECT md5($1::text)::uuid';
+            """
+        )
+        cursor.execute(
+            """
+            DO $$
+            BEGIN
+              IF NOT EXISTS (
+                SELECT 1
+                FROM pg_cast c
+                JOIN pg_type s ON s.oid = c.castsource
+                JOIN pg_type t ON t.oid = c.casttarget
+                WHERE s.typname = 'int4' AND t.typname = 'uuid'
+              ) THEN
+                CREATE CAST (integer AS uuid) WITH FUNCTION int4_to_uuid(integer);
+              END IF;
+            END $$;
+            """
+        )
+        cursor.execute(
+            """
+            DO $$
+            BEGIN
+              IF NOT EXISTS (
+                SELECT 1
+                FROM pg_cast c
+                JOIN pg_type s ON s.oid = c.castsource
+                JOIN pg_type t ON t.oid = c.casttarget
+                WHERE s.typname = 'int8' AND t.typname = 'uuid'
+              ) THEN
+                CREATE CAST (bigint AS uuid) WITH FUNCTION int8_to_uuid(bigint);
+              END IF;
+            END $$;
+            """
+        )
+
+
+def _drop_numeric_uuid_casts(apps, schema_editor):
+    del apps
+    if schema_editor.connection.vendor != "postgresql":
+        return
+
+    with schema_editor.connection.cursor() as cursor:
+        cursor.execute("DROP CAST IF EXISTS (bigint AS uuid);")
+        cursor.execute("DROP CAST IF EXISTS (integer AS uuid);")
+        cursor.execute("DROP FUNCTION IF EXISTS int8_to_uuid(bigint);")
+        cursor.execute("DROP FUNCTION IF EXISTS int4_to_uuid(integer);")
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -150,6 +222,7 @@ class Migration(migrations.Migration):
             field=models.CharField(default='', max_length=64),
             preserve_default=False,
         ),
+        migrations.RunPython(_create_numeric_uuid_casts, migrations.RunPython.noop),
         migrations.AlterField(
             model_name='counterparty',
             name='id',
@@ -241,4 +314,5 @@ class Migration(migrations.Migration):
             model_name='invoiceversion',
             constraint=models.UniqueConstraint(fields=('invoice', 'version_number'), name='uniq_invoice_version_number'),
         ),
+        migrations.RunPython(_drop_numeric_uuid_casts, migrations.RunPython.noop),
     ]
