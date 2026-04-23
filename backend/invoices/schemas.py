@@ -63,3 +63,32 @@ class TransactionPayloadSerializer(serializers.Serializer):
 
 class IngestTransactionsSerializer(serializers.Serializer):
     transactions = TransactionPayloadSerializer(many=True)
+
+
+class InvoiceListQuerySerializer(serializers.Serializer):
+    tab = serializers.ChoiceField(choices=["to_process", "processed"])
+    counterparty = serializers.CharField(required=False, allow_blank=True)
+    dateFrom = serializers.DateField(required=False)
+    dateTo = serializers.DateField(required=False)
+    status = serializers.ListField(
+        child=serializers.ChoiceField(
+            choices=[
+                "project_created",
+                "validating_error",
+                "invoice_created",
+                "sending_error",
+                "sent",
+            ]
+        ),
+        required=False,
+    )
+    departmentId = serializers.ListField(child=serializers.UUIDField(), required=False)
+    page = serializers.IntegerField(required=False, min_value=1, default=1)
+    size = serializers.IntegerField(required=False, min_value=1, default=20)
+
+    def validate(self, attrs):
+        date_from = attrs.get("dateFrom")
+        date_to = attrs.get("dateTo")
+        if date_from and date_to and date_from > date_to:
+            raise serializers.ValidationError({"dateFrom": "dateFrom must be <= dateTo"})
+        return attrs

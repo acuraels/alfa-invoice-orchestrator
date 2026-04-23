@@ -3,6 +3,7 @@ import os
 from io import StringIO
 
 from django.db import connection
+from django.db.models import Q
 from django.http import HttpResponse
 from django.utils import timezone
 from prometheus_client import CONTENT_TYPE_LATEST, CollectorRegistry, generate_latest, multiprocess
@@ -12,7 +13,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from common.role_scope import RoleScopedQuerysetMixin
+from common.role_scope import RoleScopedQuerysetMixin, filter_queryset_by_role
 from invoices.metrics import (
     transactions_duplicate_total,
     transactions_invalid_schema_total,
@@ -29,7 +30,7 @@ from invoices.models import (
     ProcessingError,
     RawTransaction,
 )
-from invoices.schemas import TransactionPayloadSerializer
+from invoices.schemas import InvoiceListQuerySerializer, TransactionPayloadSerializer
 from invoices.serializers import (
     AggregationGroupSerializer,
     DraftInvoiceSerializer,
@@ -290,3 +291,140 @@ class ExportCsvReportView(APIView):
         response = HttpResponse(output.getvalue(), content_type="text/csv")
         response["Content-Disposition"] = 'attachment; filename="final_invoices.csv"'
         return response
+
+
+class InvoiceListView(APIView):
+    permission_classes = (IsAuthenticated,)
+
+    def get(self, request):
+        raw_status = request.query_params.getlist("status")
+        raw_department_ids = request.query_params.getlist("departmentId")
+        data = {
+            "tab": request.query_params.get("tab"),
+            "counterparty": request.query_params.get("counterparty", ""),
+        }
+
+        if request.query_params.get("dateFrom") is not None:
+            data["dateFrom"] = request.query_params.get("dateFrom")
+        if request.query_params.get("dateTo") is not None:
+            data["dateTo"] = request.query_params.get("dateTo")
+        if raw_status:
+            data["status"] = raw_status
+        if raw_department_ids:
+            data["departmentId"] = raw_department_ids
+        if request.query_params.get("page") is not None:
+            data["page"] = request.query_params.get("page")
+        if request.query_params.get("size") is not None:
+            data["size"] = request.query_params.get("size")
+
+        serializer = InvoiceListQuerySerializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        params = serializer.validated_data
+
+        statuses = params.get("status")
+        if not statuses:
+            if params["tab"] == "to_process":
+                statuses = [
+                    DraftInvoice.Status.PROJECT_CREATED,
+                    DraftInvoice.Status.VALIDATING_ERROR,
+                ]
+            else:
+                statuses = [
+                    FinalInvoice.Status.INVOICE_CREATED,
+                    FinalInvoice.Status.SENDING_ERROR,
+                    FinalInvoice.Status.SENT,
+                ]
+
+        draft_statuses = [status for status in statuses if status in DraftInvoice.Status.values]
+        final_statuses = [status for status in statuses if status in FinalInvoice.Status.values]
+
+        counterparty = params.get("counterparty", "").strip()
+        date_from = params.get("dateFrom")
+        date_to = params.get("dateTo")
+        department_ids = params.get("departmentId") or []
+
+        draft_qs = DraftInvoice.objects.select_related("group", "counterparty", "department").all()
+        final_qs = FinalInvoice.objects.select_related("counterparty", "department").all()
+
+        draft_qs = filter_queryset_by_role(draft_qs, request.user, "department")
+        final_qs = filter_queryset_by_role(final_qs, request.user, "department")
+
+        if counterparty:
+            search_filter = Q(counterparty__name__icontains=counterparty) | Q(
+                counterparty__inn__icontains=counterparty
+            )
+            draft_qs = draft_qs.filter(search_filter)
+            final_qs = final_qs.filter(search_filter)
+
+        if date_from:
+            draft_qs = draft_qs.filter(transaction_date__gte=date_from)
+            final_qs = final_qs.filter(issue_date__gte=date_from)
+
+        if date_to:
+            draft_qs = draft_qs.filter(transaction_date__lte=date_to)
+            final_qs = final_qs.filter(issue_date__lte=date_to)
+
+        if department_ids:
+            draft_qs = draft_qs.filter(department__public_id__in=department_ids)
+            final_qs = final_qs.filter(department__public_id__in=department_ids)
+
+        if draft_statuses:
+            draft_qs = draft_qs.filter(status__in=draft_statuses)
+        else:
+            draft_qs = draft_qs.none()
+
+        if final_statuses:
+            final_qs = final_qs.filter(status__in=final_statuses)
+        else:
+            final_qs = final_qs.none()
+
+        items = []
+        for draft in draft_qs:
+            issue_date = draft.transaction_date
+            items.append(
+                {
+                    "id": str(draft.id),
+                    "number": draft.group.drf,
+                    "counterpartyName": draft.counterparty.name,
+                    "status": draft.status,
+                    "issueDate": issue_date.isoformat() if issue_date else None,
+                    "_sort_date": issue_date or draft.created_at.date(),
+                    "_created_at": draft.created_at,
+                }
+            )
+
+        for final_invoice in final_qs:
+            issue_date = final_invoice.issue_date
+            items.append(
+                {
+                    "id": str(final_invoice.id),
+                    "number": final_invoice.number,
+                    "counterpartyName": final_invoice.counterparty.name,
+                    "status": final_invoice.status,
+                    "issueDate": issue_date.isoformat() if issue_date else None,
+                    "_sort_date": issue_date or final_invoice.created_at.date(),
+                    "_created_at": final_invoice.created_at,
+                }
+            )
+
+        items.sort(key=lambda item: (item["_sort_date"], item["_created_at"]), reverse=True)
+
+        total_elements = len(items)
+        size = params["size"]
+        page = params["page"]
+        total_pages = (total_elements + size - 1) // size if total_elements else 0
+        start = (page - 1) * size
+        end = start + size
+
+        page_items = items[start:end]
+        for item in page_items:
+            item.pop("_sort_date", None)
+            item.pop("_created_at", None)
+
+        return Response(
+            {
+                "totalElements": total_elements,
+                "totalPages": total_pages,
+                "items": page_items,
+            }
+        )
