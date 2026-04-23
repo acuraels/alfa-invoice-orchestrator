@@ -31,6 +31,7 @@ class User(AbstractUser):
 
     role = models.CharField(max_length=32, choices=Roles.choices)
     full_name = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
     departments = models.ManyToManyField(
         "invoices.Department",
         through="invoices.DepartmentAccess",
