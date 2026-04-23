@@ -23,7 +23,6 @@ class Command(BaseCommand):
                     "code": dep["code"],
                     "name": dep["name"],
                     "mnemonic": dep["mnemonic"],
-                    "is_active": True,
                 },
             )
 
@@ -32,9 +31,8 @@ class Command(BaseCommand):
                 id=cp["id"],
                 defaults={
                     "name": cp["name"],
+                    "address": cp["address"],
                     "inn": cp["inn"],
-                    "kpp": cp["kpp"],
-                    "is_active": True,
                 },
             )
 
@@ -68,7 +66,6 @@ class Command(BaseCommand):
             DepartmentAccess.objects.update_or_create(
                 user=admin,
                 department=department,
-                defaults={"role": "admin"},
             )
 
         created_demo_users = []
@@ -97,7 +94,6 @@ class Command(BaseCommand):
                 DepartmentAccess.objects.update_or_create(
                     user=user,
                     department=department,
-                    defaults={"role": "user"},
                 )
                 created_demo_users.append((username, department_code, user_created))
 

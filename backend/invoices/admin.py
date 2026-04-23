@@ -5,22 +5,21 @@ from invoices import models
 
 @admin.register(models.Department)
 class DepartmentAdmin(admin.ModelAdmin):
-    list_display = ("id", "code", "name", "mnemonic", "is_active")
-    list_filter = ("code", "is_active")
+    list_display = ("id", "code", "name", "mnemonic")
+    list_filter = ("code",)
     search_fields = ("name", "code", "mnemonic")
 
 
 @admin.register(models.Counterparty)
 class CounterpartyAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "inn", "is_active")
-    list_filter = ("is_active",)
-    search_fields = ("name", "inn", "kpp")
+    list_display = ("id", "name", "address", "inn")
+    search_fields = ("name", "inn", "address")
 
 
 @admin.register(models.DepartmentAccess)
 class DepartmentAccessAdmin(admin.ModelAdmin):
-    list_display = ("user", "department", "role")
-    list_filter = ("department", "role")
+    list_display = ("user", "department")
+    list_filter = ("department",)
 
 
 @admin.register(models.RawTransaction)
@@ -28,14 +27,14 @@ class RawTransactionAdmin(admin.ModelAdmin):
     list_display = (
         "id",
         "drf",
-        "transaction_type",
+        "type",
         "status",
         "department",
         "counterparty",
-        "transaction_date",
+        "date",
         "received_at",
     )
-    list_filter = ("status", "transaction_type", "department", "transaction_date")
+    list_filter = ("status", "type", "department", "date")
     search_fields = ("drf", "external_id", "payload_hash")
 
 
@@ -89,15 +88,14 @@ class FinalInvoiceAdmin(admin.ModelAdmin):
     list_display = (
         "id",
         "number",
-        "drf",
+        "sequence_number",
         "status",
-        "export_status",
         "department",
         "issue_date",
         "total_with_vat",
     )
-    list_filter = ("status", "export_status", "department", "issue_date")
-    search_fields = ("number", "drf")
+    list_filter = ("status", "department", "issue_date")
+    search_fields = ("number", "sequence_number")
     inlines = [FinalInvoiceLineInline]
 
 

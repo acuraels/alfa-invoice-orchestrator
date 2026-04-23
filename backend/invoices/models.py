@@ -6,12 +6,10 @@ from django.db import models
 
 
 class Department(models.Model):
-    id = models.PositiveIntegerField(primary_key=True)
-    public_id = models.UUIDField(default=uuid4, unique=True, editable=False)
-    code = models.CharField(max_length=32, unique=True)
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    code = models.CharField(max_length=32, unique=True, blank=True, default="")
     name = models.CharField(max_length=128)
     mnemonic = models.CharField(max_length=8)
-    is_active = models.BooleanField(default=True)
 
     class Meta:
         indexes = [
@@ -24,12 +22,10 @@ class Department(models.Model):
 
 
 class Counterparty(models.Model):
-    id = models.PositiveIntegerField(primary_key=True)
-    public_id = models.UUIDField(default=uuid4, unique=True, editable=False)
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
     name = models.CharField(max_length=255)
+    address = models.CharField(max_length=255, blank=True, default="")
     inn = models.CharField(max_length=16, blank=True, default="")
-    kpp = models.CharField(max_length=16, blank=True, default="")
-    is_active = models.BooleanField(default=True)
 
     class Meta:
         indexes = [
@@ -44,7 +40,6 @@ class Counterparty(models.Model):
 class DepartmentAccess(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="department_access")
     department = models.ForeignKey(Department, on_delete=models.CASCADE, related_name="user_access")
-    role = models.CharField(max_length=64, blank=True, default="")
 
     class Meta:
         constraints = [
@@ -146,6 +141,7 @@ class RawTransaction(models.Model):
         DUPLICATE = "DUPLICATE", "Duplicate"
         PROCESSED = "PROCESSED", "Processed"
 
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
     inbound_log = models.ForeignKey(
         InboundMessageLog,
         on_delete=models.SET_NULL,
@@ -162,7 +158,7 @@ class RawTransaction(models.Model):
     )
     external_id = models.CharField(max_length=128, blank=True, default="")
     drf = models.CharField(max_length=64)
-    transaction_type = models.CharField(max_length=16, choices=TxType.choices)
+    type = models.CharField(max_length=16, choices=TxType.choices)
     counterparty = models.ForeignKey(
         Counterparty,
         on_delete=models.PROTECT,
@@ -184,11 +180,11 @@ class RawTransaction(models.Model):
         blank=True,
         related_name="transactions",
     )
-    transaction_date = models.DateField(null=True, blank=True)
+    date = models.DateField(null=True, blank=True)
     amount = models.DecimalField(max_digits=16, decimal_places=4, null=True, blank=True)
     debit_account = models.CharField(max_length=64)
     credit_account = models.CharField(max_length=64)
-    created_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField()
 
     product_name = models.CharField(max_length=255, null=True, blank=True)
     unit_measure = models.CharField(max_length=32, null=True, blank=True)
@@ -208,7 +204,7 @@ class RawTransaction(models.Model):
         indexes = [
             models.Index(fields=["drf"]),
             models.Index(fields=["status"]),
-            models.Index(fields=["transaction_date"]),
+            models.Index(fields=["date"]),
             models.Index(fields=["created_at"]),
             models.Index(fields=["received_at"]),
             models.Index(fields=["payload_hash"]),
@@ -323,10 +319,13 @@ class InvoiceNumberSequence(models.Model):
 
 class FinalInvoice(models.Model):
     class Status(models.TextChoices):
+        PROJECT_CREATED = "project_created", "Project created"
+        VALIDATING_ERROR = "validating_error", "Validating error"
         INVOICE_CREATED = "invoice_created", "Invoice created"
         SENDING_ERROR = "sending_error", "Sending error"
         SENT = "sent", "Sent"
 
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
     draft_invoice = models.OneToOneField(
         DraftInvoice,
         on_delete=models.SET_NULL,
@@ -335,26 +334,30 @@ class FinalInvoice(models.Model):
         related_name="final_invoice",
     )
     number = models.CharField(max_length=64, unique=True)
-    drf = models.CharField(max_length=64)
+    sequence_number = models.CharField(max_length=64, blank=True, default="")
     counterparty = models.ForeignKey(Counterparty, on_delete=models.PROTECT, related_name="final_invoices")
     department = models.ForeignKey(Department, on_delete=models.PROTECT, related_name="final_invoices")
+    current_version = models.PositiveIntegerField(default=1)
+    last_author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="last_authored_invoices",
+    )
     issue_date = models.DateField()
     payment_doc_number = models.CharField(max_length=128, blank=True, default="")
     payment_doc_date = models.DateField(null=True, blank=True)
     vat_rate = models.DecimalField(max_digits=6, decimal_places=4)
     total_vat_amount = models.DecimalField(max_digits=16, decimal_places=4)
     total_with_vat = models.DecimalField(max_digits=16, decimal_places=4)
-    status = models.CharField(max_length=32, choices=Status.choices, default=Status.INVOICE_CREATED)
-    export_status = models.CharField(max_length=32, choices=Status.choices, default=Status.INVOICE_CREATED)
-    materialized_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=32, choices=Status.choices, default=Status.PROJECT_CREATED)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         indexes = [
-            models.Index(fields=["drf"]),
             models.Index(fields=["status"]),
-            models.Index(fields=["export_status"]),
             models.Index(fields=["issue_date"]),
             models.Index(fields=["created_at"]),
             models.Index(fields=["department"]),
@@ -363,8 +366,8 @@ class FinalInvoice(models.Model):
 
 
 class FinalInvoiceLine(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
     final_invoice = models.ForeignKey(FinalInvoice, on_delete=models.CASCADE, related_name="lines")
-    line_no = models.PositiveIntegerField()
     product_name = models.CharField(max_length=255)
     unit = models.CharField(max_length=32)
     quantity = models.DecimalField(max_digits=16, decimal_places=4)
@@ -373,9 +376,24 @@ class FinalInvoiceLine(models.Model):
     vat_amount = models.DecimalField(max_digits=16, decimal_places=4)
     total_amount = models.DecimalField(max_digits=16, decimal_places=4)
 
+class InvoiceVersion(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    invoice = models.ForeignKey(FinalInvoice, on_delete=models.CASCADE, related_name="versions")
+    version_number = models.PositiveIntegerField()
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="invoice_versions",
+    )
+    comment = models.CharField(max_length=255, blank=True, default="")
+    snapshot = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=["final_invoice", "line_no"], name="uniq_final_line_no"),
+            models.UniqueConstraint(fields=["invoice", "version_number"], name="uniq_invoice_version_number"),
         ]
 
 

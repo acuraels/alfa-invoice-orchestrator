@@ -261,7 +261,7 @@ class ExportCsvReportView(APIView):
         writer.writerow(
             [
                 "number",
-                "drf",
+                "sequence_number",
                 "department",
                 "counterparty",
                 "issue_date",
@@ -269,14 +269,13 @@ class ExportCsvReportView(APIView):
                 "total_vat_amount",
                 "total_with_vat",
                 "status",
-                "export_status",
             ]
         )
         for invoice in invoices:
             writer.writerow(
                 [
                     invoice.number,
-                    invoice.drf,
+                    invoice.sequence_number,
                     invoice.department.code,
                     invoice.counterparty.name,
                     invoice.issue_date.isoformat(),
@@ -284,7 +283,6 @@ class ExportCsvReportView(APIView):
                     str(invoice.total_vat_amount),
                     str(invoice.total_with_vat),
                     invoice.status,
-                    invoice.export_status,
                 ]
             )
 

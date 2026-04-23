@@ -84,22 +84,19 @@ def make_vat_payload(
 class BaseDomainTestCase(TestCase):
     def setUp(self):
         Department.objects.create(
-            id=101,
-            public_id=DEPARTMENT_FACTORING_UUID,
+            id=DEPARTMENT_FACTORING_UUID,
             code="factoring",
             name="Факторинг",
             mnemonic="fct",
         )
         Department.objects.create(
-            id=102,
-            public_id=DEPARTMENT_ACCOUNTING_UUID,
+            id=DEPARTMENT_ACCOUNTING_UUID,
             code="accounting",
             name="Бухучет",
             mnemonic="acc",
         )
         Counterparty.objects.create(
-            id=10001,
-            public_id=COUNTERPARTY_MAIN_UUID,
+            id=COUNTERPARTY_MAIN_UUID,
             name="АО Альфа Поставщик",
         )
 
@@ -177,22 +174,19 @@ class MaterializationTests(BaseDomainTestCase):
 class IntegrationPipelineTests(APITestCase):
     def setUp(self):
         Department.objects.create(
-            id=101,
-            public_id=DEPARTMENT_FACTORING_UUID,
+            id=DEPARTMENT_FACTORING_UUID,
             code="factoring",
             name="Факторинг",
             mnemonic="fct",
         )
         Department.objects.create(
-            id=102,
-            public_id=DEPARTMENT_ACCOUNTING_UUID,
+            id=DEPARTMENT_ACCOUNTING_UUID,
             code="accounting",
             name="Бухучет",
             mnemonic="acc",
         )
         Counterparty.objects.create(
-            id=10001,
-            public_id=COUNTERPARTY_MAIN_UUID,
+            id=COUNTERPARTY_MAIN_UUID,
             name="АО Альфа Поставщик",
         )
 
@@ -258,7 +252,7 @@ class IntegrationPipelineTests(APITestCase):
             format="json",
         )
         materialize_ready_drafts(limit=10)
-        final = FinalInvoice.objects.get(drf="DRF-RETRY")
+        final = FinalInvoice.objects.get(draft_invoice__group__drf="DRF-RETRY")
 
         response = self.client.post(f"/api/v1/final-invoices/{final.id}/retry/")
 

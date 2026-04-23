@@ -114,8 +114,8 @@ def _update_gauges() -> None:
 
 
 def _get_refs(payload: dict) -> tuple[Counterparty, Department]:
-    counterparty = Counterparty.objects.get(public_id=payload["counterpartyId"])
-    department = Department.objects.get(public_id=payload["departmentId"])
+    counterparty = Counterparty.objects.get(pk=payload["counterpartyId"])
+    department = Department.objects.get(pk=payload["departmentId"])
     return counterparty, department
 
 
@@ -163,10 +163,10 @@ def _upsert_group(
 
 def _recalculate_group_counts(group: AggregationGroup) -> None:
     stats_start = perf_counter()
-    stats = group.raw_transactions.values("transaction_type").annotate(cnt=Count("id"))
+    stats = group.raw_transactions.values("type").annotate(cnt=Count("id"))
     db_read_duration_seconds.observe(perf_counter() - stats_start)
 
-    counts = {item["transaction_type"]: item["cnt"] for item in stats}
+    counts = {item["type"]: item["cnt"] for item in stats}
     group.income_count = counts.get(RawTransaction.TxType.INCOME, 0)
     group.vat_count = counts.get(RawTransaction.TxType.VAT, 0)
     group.total_count = group.income_count + group.vat_count
@@ -225,8 +225,8 @@ def build_draft_invoice(group: AggregationGroup) -> DraftInvoice:
     txs = list(group.raw_transactions.filter(status=RawTransaction.Status.PROCESSED).order_by("id"))
     db_read_duration_seconds.observe(perf_counter() - tx_start)
 
-    incomes = [tx for tx in txs if tx.transaction_type == RawTransaction.TxType.INCOME]
-    vat_txs = [tx for tx in txs if tx.transaction_type == RawTransaction.TxType.VAT]
+    incomes = [tx for tx in txs if tx.type == RawTransaction.TxType.INCOME]
+    vat_txs = [tx for tx in txs if tx.type == RawTransaction.TxType.VAT]
 
     if not incomes:
         return _set_draft_error(group, "Group must contain at least 1 INCOME transaction")
@@ -436,10 +436,10 @@ def process_transaction_payload(
             aggregation_group=group,
             external_id=payload.get("transactionId", ""),
             drf=data["drf"],
-            transaction_type=data["type"],
+            type=data["type"],
             counterparty=counterparty,
             department=department,
-            transaction_date=data["date"],
+            date=data["date"],
             amount=data.get("amount"),
             debit_account=data["debitAccount"],
             credit_account=data["creditAccount"],
@@ -542,7 +542,7 @@ def materialize_draft_invoice(draft: DraftInvoice) -> FinalInvoice | None:
                         "destination": "csv",
                     },
                 )
-                _mark_draft_and_group_materialized(draft, materialized_at=final_invoice.materialized_at)
+                _mark_draft_and_group_materialized(draft, materialized_at=timezone.now())
                 job.status = MaterializationJob.Status.SUCCESS
                 job.finished_at = timezone.now()
                 job.save(update_fields=["status", "finished_at"])
@@ -557,9 +557,11 @@ def materialize_draft_invoice(draft: DraftInvoice) -> FinalInvoice | None:
             final_invoice = FinalInvoice.objects.create(
                 draft_invoice=draft,
                 number=invoice_number,
-                drf=draft.group.drf,
+                sequence_number=invoice_number.split("/")[-1],
                 counterparty=draft.counterparty,
                 department=draft.department,
+                current_version=1,
+                last_author=None,
                 issue_date=draft.transaction_date,
                 payment_doc_number="",
                 payment_doc_date=None,
@@ -567,13 +569,11 @@ def materialize_draft_invoice(draft: DraftInvoice) -> FinalInvoice | None:
                 total_vat_amount=draft.total_vat_amount,
                 total_with_vat=draft.total_with_vat,
                 status=FinalInvoice.Status.INVOICE_CREATED,
-                export_status=FinalInvoice.Status.INVOICE_CREATED,
             )
 
             lines = [
                 FinalInvoiceLine(
                     final_invoice=final_invoice,
-                    line_no=line.line_no,
                     product_name=line.product_name,
                     unit=line.unit,
                     quantity=line.quantity,
@@ -582,7 +582,7 @@ def materialize_draft_invoice(draft: DraftInvoice) -> FinalInvoice | None:
                     vat_amount=line.vat_amount,
                     total_amount=line.total_amount,
                 )
-                for line in draft.lines.all().order_by("line_no")
+                for line in draft.lines.all().order_by("id")
             ]
             FinalInvoiceLine.objects.bulk_create(lines)
             RawTransaction.objects.filter(aggregation_group=draft.group).update(invoice=final_invoice)
@@ -700,9 +700,8 @@ def retry_final_invoice(final_invoice: FinalInvoice) -> ExportRecord:
     )
 
     old_status = final_invoice.status
-    final_invoice.export_status = FinalInvoice.Status.SENT
     final_invoice.status = FinalInvoice.Status.SENT
-    final_invoice.save(update_fields=["export_status", "status", "updated_at"])
+    final_invoice.save(update_fields=["status", "updated_at"])
 
     export_record.status = ExportRecord.Status.SENT
     export_record.last_error = ""
@@ -778,7 +777,7 @@ def summary_snapshot() -> dict:
             continue
         first_tx = draft.group.raw_transactions.aggregate(min_ts=Min("received_at"))["min_ts"]
         if first_tx:
-            latencies.append((final_invoice.materialized_at - first_tx).total_seconds())
+            latencies.append((final_invoice.created_at - first_tx).total_seconds())
 
     db_read_duration_seconds.observe(perf_counter() - read_start)
 

@@ -18,8 +18,8 @@ from invoices.schemas import IngestTransactionsSerializer
 class RawTransactionSerializer(serializers.ModelSerializer):
     counterparty_name = serializers.CharField(source="counterparty.name", read_only=True)
     department_code = serializers.CharField(source="department.code", read_only=True)
-    counterparty_id = serializers.UUIDField(source="counterparty.public_id", read_only=True)
-    department_id = serializers.UUIDField(source="department.public_id", read_only=True)
+    counterparty_id = serializers.UUIDField(source="counterparty.id", read_only=True)
+    department_id = serializers.UUIDField(source="department.id", read_only=True)
 
     class Meta:
         model = RawTransaction
@@ -27,14 +27,14 @@ class RawTransactionSerializer(serializers.ModelSerializer):
             "id",
             "external_id",
             "drf",
-            "transaction_type",
+            "type",
             "counterparty",
             "counterparty_name",
             "counterparty_id",
             "department",
             "department_code",
             "department_id",
-            "transaction_date",
+            "date",
             "amount",
             "debit_account",
             "credit_account",
@@ -140,15 +140,23 @@ class FinalInvoiceLineSerializer(serializers.ModelSerializer):
 
 class FinalInvoiceSerializer(serializers.ModelSerializer):
     lines = FinalInvoiceLineSerializer(many=True, read_only=True)
-    counterpartyId = serializers.UUIDField(source="counterparty.public_id", read_only=True)
+    counterpartyId = serializers.UUIDField(source="counterparty.id", read_only=True)
+    departmentId = serializers.UUIDField(source="department.id", read_only=True)
     createdAt = serializers.DateTimeField(source="created_at", read_only=True)
+    sequenceNumber = serializers.CharField(source="sequence_number", read_only=True)
 
     class Meta:
         model = FinalInvoice
         fields = [
+            "id",
             "number",
+            "sequenceNumber",
+            "departmentId",
             "issue_date",
             "counterpartyId",
+            "current_version",
+            "last_author",
+            "status",
             "payment_doc_number",
             "payment_doc_date",
             "vat_rate",
