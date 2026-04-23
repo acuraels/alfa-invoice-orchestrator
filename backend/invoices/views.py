@@ -22,13 +22,13 @@ from invoices.metrics import (
 )
 from invoices.models import (
     AggregationGroup,
-    DraftInvoice,
     ExportRecord,
     FinalInvoice,
     IdempotencyRecord,
     InboundMessageLog,
     ProcessingError,
     RawTransaction,
+    DraftInvoice,
 )
 from invoices.schemas import InvoiceListQuerySerializer, TransactionPayloadSerializer
 from invoices.serializers import (
@@ -323,8 +323,8 @@ class InvoiceListView(APIView):
         if not statuses:
             if params["tab"] == "to_process":
                 statuses = [
-                    DraftInvoice.Status.PROJECT_CREATED,
-                    DraftInvoice.Status.VALIDATING_ERROR,
+                    FinalInvoice.Status.PROJECT_CREATED,
+                    FinalInvoice.Status.VALIDATING_ERROR,
                 ]
             else:
                 statuses = [
@@ -333,7 +333,6 @@ class InvoiceListView(APIView):
                     FinalInvoice.Status.SENT,
                 ]
 
-        draft_statuses = [status for status in statuses if status in DraftInvoice.Status.values]
         final_statuses = [status for status in statuses if status in FinalInvoice.Status.values]
 
         counterparty = params.get("counterparty", "").strip()
@@ -341,35 +340,24 @@ class InvoiceListView(APIView):
         date_to = params.get("dateTo")
         department_ids = params.get("departmentId") or []
 
-        draft_qs = DraftInvoice.objects.select_related("group", "counterparty", "department").all()
         final_qs = FinalInvoice.objects.select_related("counterparty", "department").all()
 
-        draft_qs = filter_queryset_by_role(draft_qs, request.user, "department")
         final_qs = filter_queryset_by_role(final_qs, request.user, "department")
 
         if counterparty:
             search_filter = Q(counterparty__name__icontains=counterparty) | Q(
                 counterparty__inn__icontains=counterparty
             )
-            draft_qs = draft_qs.filter(search_filter)
             final_qs = final_qs.filter(search_filter)
 
         if date_from:
-            draft_qs = draft_qs.filter(transaction_date__gte=date_from)
             final_qs = final_qs.filter(issue_date__gte=date_from)
 
         if date_to:
-            draft_qs = draft_qs.filter(transaction_date__lte=date_to)
             final_qs = final_qs.filter(issue_date__lte=date_to)
 
         if department_ids:
-            draft_qs = draft_qs.filter(department__public_id__in=department_ids)
             final_qs = final_qs.filter(department__public_id__in=department_ids)
-
-        if draft_statuses:
-            draft_qs = draft_qs.filter(status__in=draft_statuses)
-        else:
-            draft_qs = draft_qs.none()
 
         if final_statuses:
             final_qs = final_qs.filter(status__in=final_statuses)
@@ -377,29 +365,15 @@ class InvoiceListView(APIView):
             final_qs = final_qs.none()
 
         items = []
-        for draft in draft_qs:
-            issue_date = draft.transaction_date
-            items.append(
-                {
-                    "id": str(draft.id),
-                    "number": draft.group.drf,
-                    "counterpartyName": draft.counterparty.name,
-                    "status": draft.status,
-                    "issueDate": issue_date.isoformat() if issue_date else None,
-                    "_sort_date": issue_date or draft.created_at.date(),
-                    "_created_at": draft.created_at,
-                }
-            )
-
         for final_invoice in final_qs:
             issue_date = final_invoice.issue_date
             items.append(
                 {
                     "id": str(final_invoice.id),
                     "number": final_invoice.number,
-                    "counterpartyName": final_invoice.counterparty.name,
+                    "counterparty_name": final_invoice.counterparty.name,
                     "status": final_invoice.status,
-                    "issueDate": issue_date.isoformat() if issue_date else None,
+                    "issue_date": issue_date.isoformat() if issue_date else None,
                     "_sort_date": issue_date or final_invoice.created_at.date(),
                     "_created_at": final_invoice.created_at,
                 }
@@ -421,8 +395,8 @@ class InvoiceListView(APIView):
 
         return Response(
             {
-                "totalElements": total_elements,
-                "totalPages": total_pages,
+                "total_elements": total_elements,
+                "total_pages": total_pages,
                 "items": page_items,
             }
         )
